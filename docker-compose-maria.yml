@@ -1,0 +1,18 @@
+version: "3.7"
+
+#https://hub.docker.com/_/mariadb
+#docker run --detach --name some-mariadb --env MARIADB_USER=example-user --env MARIADB_PASSWORD=my_cool_secret --env MARIADB_DATABASE=exmple-database --env MARIADB_ROOT_PASSWORD=my-secret-pw mariadb:latest
+
+services:
+  db:
+    image: mariadb
+    restart: always
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_USER: haghard
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080

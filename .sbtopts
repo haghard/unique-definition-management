@@ -1,0 +1,12 @@
+-J-Xms800M
+-J-Xmx900M
+-J-XX:MaxMetaspaceSize=700m
+-J-Xss4M
+-J-XX:+UseG1GC
+-J-XX:+PrintCommandLineFlags
+-J-XshowSettings:vm
+-J-XX:+UseCompressedOops
+-J--add-opens=java.base/java.util=ALL-UNNAMED
+-J--add-opens=java.base/java.lang=ALL-UNNAMED
+-J--add-opens=java.desktop/java.awt=ALL-UNNAMED
+-J--add-opens=java.base/sun.nio.ch=ALL-UNNAMED

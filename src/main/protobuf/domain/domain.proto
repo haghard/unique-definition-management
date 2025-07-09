@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+import "scalapb/scalapb.proto";
+option java_multiple_files = true;
+option java_package = "com.definition.domain";
+
+package com.definition.domain;
+
+option (scalapb.options) = {
+  lenses: true,
+  preserve_unknown_fields: false,
+  //retain_source_code_info: true,
+  no_default_values_in_constructor: false,
+  no_primitive_wrappers: true,
+  single_file: true,
+  preamble: "sealed trait Cmd extends scalapb.GeneratedMessage",
+  preamble: "sealed trait Event extends scalapb.GeneratedMessage",
+};
+
+message Create {
+  option (scalapb.message).extends = "Cmd";
+
+  string owner_id = 1;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  string replyTo = 3;
+}
+
+message Update {
+  option (scalapb.message).extends = "Cmd";
+
+  string owner_id = 1;
+  Definition new_definition = 2 [(scalapb.field).no_box = true];
+  Definition prev_definition = 3 [(scalapb.field).no_box = true];
+  //int32 prev_definition_bucket_ind = 3;
+  string replyTo = 4;
+}
+
+/*message Update2 {
+  option (scalapb.message).extends = "Cmd";
+
+  string owner_id = 1;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  string prev_definition_content_key = 3;
+  string replyTo = 4;
+}*/
+
+message Release {
+  option (scalapb.message).extends = "Cmd";
+
+  string owner_id = 1;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  string replyTo = 3;
+}
+
+message Passivate {
+  option (scalapb.message).extends = "Cmd";
+}
+
+message Acquired {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+}
+
+message Released {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  //int32 prev_definition_bucket_ind = 2;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+}
+
+message ReleaseRequested {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  //int32 prev_definition_bucket_ind = 2;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+}
+
+
+message Definition {
+  string name = 1;
+  string address = 2;
+  string city = 3;
+  string country = 4;
+  optional string state = 5;
+  optional string zipCode = 6;
+  optional string brand = 7;
+}
+

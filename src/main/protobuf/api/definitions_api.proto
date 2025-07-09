@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+import "scalapb/scalapb.proto";
+import "domain/domain.proto";
+
+option java_multiple_files = true;
+option java_package = "com.definition.api";
+
+package com.definition.api;
+
+option (scalapb.options) = {
+  lenses: true,
+  preserve_unknown_fields: false,
+  retain_source_code_info: true,
+  no_primitive_wrappers: true,
+  no_default_values_in_constructor: true,
+  single_file: true,
+  preamble: "sealed trait DefinitionRequest extends scalapb.GeneratedMessage",
+};
+
+service DefinitionService {
+  rpc Create(CreateRequest) returns (DefinitionReply) {}
+  rpc Update(UpdateDefinitionRequest) returns (DefinitionReply) {}
+}
+
+message CreateRequest {
+  option (scalapb.message).extends = "DefinitionRequest";
+  string owner_id = 1;
+  com.definition.domain.Definition definition = 2 [(scalapb.field).no_box = true];
+}
+
+message UpdateDefinitionRequest {
+  option (scalapb.message).extends = "DefinitionRequest";
+  string owner_id = 1;
+  com.definition.domain.Definition new_definition = 2 [(scalapb.field).no_box = true];
+  com.definition.domain.Definition old_definition = 3 [(scalapb.field).no_box = true];
+}
+
+message DefinitionReply {
+  string owner_id = 1;
+  StatusCode status_code = 2;
+  //int32 prev_definition_bucket_ind = 3;
+
+  enum StatusCode {
+    Undefined = 0;
+    OK = 1;
+    Reserved = 2;
+  }
+}
