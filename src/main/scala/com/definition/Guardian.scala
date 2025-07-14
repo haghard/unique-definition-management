@@ -1,6 +1,5 @@
 package com.definition
 
-import akka.Done
 import akka.actor.RootActorPath
 import akka.actor.typed.scaladsl.AskPattern.{schedulerFromActorSystem, Askable}
 import akka.actor.typed.scaladsl.Behaviors
@@ -10,7 +9,7 @@ import akka.cluster.ddata.SelfUniqueAddress
 import akka.cluster.sharding.typed.{ClusterShardingSettings, ShardedDaemonProcessSettings}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, ShardedDaemonProcess}
 import akka.cluster.typed.SelfUp
-import akka.cluster.Member
+import akka.cluster.{utils, Member}
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.slick.SlickProjection
@@ -19,7 +18,6 @@ import slick.basic.DatabaseConfig
 import slick.jdbc.MySQLProfile
 
 import scala.collection.immutable
-import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import com.definition.domain.*
 import com.definition.domain.Event as PbEvent
@@ -33,7 +31,7 @@ object Guardian {
 
   val numberOfTags = 4
   val tags         = Vector.tabulate(numberOfTags)(_.toString)
-  val name         = "taken-definition-events"
+  val name         = "events"
 
   private def mkProjection(
     tag: String,
@@ -50,12 +48,38 @@ object Guardian {
         EventSourcedProvider.eventsByTag[PbEvent](system, JdbcReadJournal.Identifier, tag),
         dbConfig,
         () =>
-          (envelope: akka.projection.eventsourced.EventEnvelope[PbEvent]) =>
-            envelope.event match {
-              case _: Acquired =>
-                Future.successful(Done)
-              case _: Released =>
-                Future.successful(Done)
+          (env: akka.projection.eventsourced.EventEnvelope[PbEvent]) =>
+            env.event match {
+              case cmd: Acquired =>
+                val row =
+                  DefinitionOwnershipRow(
+                    name = cmd.definition.name,
+                    address = cmd.definition.address,
+                    city = cmd.definition.city,
+                    country = cmd.definition.country,
+                    state = cmd.definition.state,
+                    zipCode = cmd.definition.zipCode,
+                    brand = cmd.definition.brand,
+                    ownerId = cmd.ownerId,
+                    persistenceId = env.persistenceId,
+                    sequenceNr = env.sequenceNr,
+                    when = env.timestamp
+                  )
+
+                AllTables.ownership.acquire(row)
+
+              case cmd: Released =>
+                AllTables.ownership.release(
+                  name = cmd.definition.name,
+                  address = cmd.definition.address,
+                  city = cmd.definition.city,
+                  country = cmd.definition.country,
+                  state = cmd.definition.state,
+                  zipCode = cmd.definition.zipCode,
+                  brand = cmd.definition.brand,
+                  ownerId = cmd.ownerId
+                )
+
               case ReleaseRequested(ownerId, definition) =>
                 region.askWithStatus(replyTo =>
                   com.definition.domain.Release(ownerId, definition, resolver.toSerializationFormat(replyTo))
@@ -99,25 +123,35 @@ object Guardian {
             cluster.subscriptions ! akka.cluster.typed.Unsubscribe(ctx.self)
             ctx.log.warn("★ ★ ★  Up: [{}]  ★ ★ ★", membersByAge.mkString(","))
 
-            // val commonSettings  = ClusterShardingSettings(system)
-            val clusterSharding                             = ClusterSharding(system)
-            val region: ActorRef[com.definition.domain.Cmd] =
+            val shardingSettings = ClusterShardingSettings(system)
+            val clusterSharding  = ClusterSharding(system)
+
+            /*val region: ActorRef[com.definition.domain.Cmd] =
               clusterSharding
                 .init(
                   Entity(TakenDefinitionBucket.TypeKey)(TakenDefinitionBucket(_))
-                    .withMessageExtractor(TakenDefinitionBucket.Extractor())
+                    .withMessageExtractor(TakenDefinitionBucket.Extractor(commonSettings.numberOfShards))
                     .withStopMessage(com.definition.domain.Passivate())
                     .withAllocationStrategy(
-                      akka.cluster.sharding.ShardCoordinator.ShardAllocationStrategy
-                        .leastShardAllocationStrategy(TakenDefinitionBucket.NumOfShards / 2, 0.2)
+                      utils.newLeastShardAllocationStrategy()
+                      // akka.cluster.sharding.ShardCoordinator.ShardAllocationStrategy.leastShardAllocationStrategy(TakenDefinitionBucket.NumOfShards / 2, 0.2)
                     )
                     .withSettings(
                       ClusterShardingSettings(system)
                         .withPassivationStrategy(
                           akka.cluster.sharding.typed.ClusterShardingSettings.PassivationStrategySettings.defaults
-                            .withIdleEntityPassivation(30.seconds)
+                            .withIdleEntityPassivation(60.seconds)
                         )
                     )
+                )*/
+
+            val region: ActorRef[com.definition.domain.Cmd] =
+              clusterSharding
+                .init(
+                  Entity(TakenDefinition.TypeKey)(TakenDefinition(_))
+                    .withMessageExtractor(TakenDefinition.Extractor(shardingSettings.numberOfShards))
+                    .withStopMessage(com.definition.domain.Passivate())
+                    .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
                 )
 
             val DDataShardReplicatorPath =
@@ -130,7 +164,10 @@ object Guardian {
                   .shardingStateChanges(ddataShardReplicator, cluster.selfMember.address.host.getOrElse("local"))
               }(system.executionContext)
 
+            AllTables.createAllTables()
+
             initProjections(region.narrow[com.definition.domain.Release])
+
             Bootstrap(region, selfAddress.host.get, grpcPort)(ctx.system)
             Behaviors.same
           }

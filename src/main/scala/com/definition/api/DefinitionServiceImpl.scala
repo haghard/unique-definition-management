@@ -9,13 +9,13 @@ import scala.concurrent.duration.DurationInt
 import com.definition.domain.*
 import com.definition.domain.Cmd as PbCmd
 
-class DefinitionServiceImpl(
+final class DefinitionServiceImpl(
   shardRegion: ActorRef[PbCmd]
 )(implicit system: ActorSystem[_])
     extends DefinitionService {
 
   implicit val sch: Scheduler                = system.scheduler
-  implicit val askTimeout: akka.util.Timeout = akka.util.Timeout(3.seconds)
+  implicit val askTimeout: akka.util.Timeout = akka.util.Timeout(5.seconds)
 
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
@@ -42,7 +42,7 @@ class DefinitionServiceImpl(
       .askWithStatus[DefinitionReply] { askReplyTo =>
         Update(
           in.ownerId,
-          Definition(
+          newDefinition = Definition(
             in.newDefinition.name,
             in.newDefinition.address,
             in.newDefinition.city,
@@ -51,14 +51,14 @@ class DefinitionServiceImpl(
             in.newDefinition.zipCode,
             in.newDefinition.brand
           ),
-          Definition(
-            in.oldDefinition.name,
-            in.oldDefinition.address,
-            in.oldDefinition.city,
-            in.oldDefinition.country,
-            in.oldDefinition.state,
-            in.oldDefinition.zipCode,
-            in.oldDefinition.brand
+          prevDefinition = Definition(
+            in.prevDefinition.name,
+            in.prevDefinition.address,
+            in.prevDefinition.city,
+            in.prevDefinition.country,
+            in.prevDefinition.state,
+            in.prevDefinition.zipCode,
+            in.prevDefinition.brand
           ),
           actorRefResolver.toSerializationFormat(askReplyTo)
         )

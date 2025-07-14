@@ -1,3 +1,5 @@
+#https://github.com/akka/akka-persistence-jdbc/blob/v5.0.4/core/src/main/resources/schema/postgres/postgres-create-schema.sql
+
 CREATE TABLE IF NOT EXISTS event_journal(
     ordering SERIAL PRIMARY KEY,
     deleted BOOLEAN DEFAULT false NOT NULL,

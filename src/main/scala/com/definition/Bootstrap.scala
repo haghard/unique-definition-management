@@ -63,7 +63,7 @@ final case class Bootstrap(
 
         // graceful termination request being handled on this connection
         shutdown.addTask(PhaseServiceRequestsDone, "http-terminate") { () =>
-          /** It doesn't accept new connection but it drains the existing connections Until the `terminationDeadline`
+          /** It doesn't accept new connection, but it drains the existing connections Until the `terminationDeadline`
             * all the req that have been accepted will be completed and only than the shutdown will continue
             */
 

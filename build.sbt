@@ -34,7 +34,6 @@ libraryDependencies ++= Seq(
   //"com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
   "com.typesafe.akka" %% "akka-cluster-tools"           % AkkaVersion,
 
-
   "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
 
   "com.typesafe.akka"             %% "akka-discovery"               % AkkaVersion,
@@ -45,12 +44,11 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.5.18",
   "org.slf4j"      % "slf4j-api"       %  "2.0.17",
 
-
   //transport = aeron-udp
   "io.aeron" % "aeron-driver" % "1.45.1",
   "io.aeron" % "aeron-client" % "1.45.1",
 
-  "org.wvlet.airframe" %% "airframe-ulid" % "2025.1.14",
+  //"org.wvlet.airframe" %% "airframe-ulid" % "2025.1.14",
 
   "mysql" % "mysql-connector-java" % "8.0.33",
   "com.lightbend.akka" %% "akka-persistence-jdbc" % akkaPersistenceJdbcV,
@@ -78,7 +76,7 @@ Compile / scalacOptions ++= Seq(
   "-Wconf:msg=lambda-parens:s",
   s"-Wconf:src=${(Compile / target).value}/scala-2.13/akka-grpc/.*:silent",
   "-Wconf:msg=Marked as deprecated in proto file:silent",
-  "-release:17",
+  //"-release:14",
   "-Xlog-reflective-calls",
   "-Xlint",
   "-Xmigration" //Emit migration warnings under -Xsource:3 as fatal warnings, not errors; -Xmigration disables fatality (#10439 by @som-snytt, #10511)

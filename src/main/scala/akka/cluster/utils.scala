@@ -5,27 +5,27 @@ import akka.actor.ActorRef
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter.TypedActorRefOps
 import akka.cluster.ddata.{LWWRegister, LWWRegisterKey, Replicator}
+import akka.cluster.sharding.ShardCoordinator
 import akka.cluster.sharding.ShardCoordinator.ShardAllocationStrategy
 import akka.stream.{ActorAttributes, CompletionStrategy, KillSwitch, KillSwitches, OverflowStrategy, Supervision}
 import akka.stream.scaladsl.{Flow, Keep, Sink}
 import akka.stream.typed.scaladsl.ActorSource
-import com.definition.TakenDefinitionBucket
+import com.definition.TakenDefinition
 
 import scala.util.control.NonFatal
 
 object utils {
 
-  def newAllocationStrategy() = {
+  def newLeastShardAllocationStrategy() = {
     val leastShardAllocationNew: akka.cluster.sharding.internal.LeastShardAllocationStrategy =
       ShardAllocationStrategy
-        .leastShardAllocationStrategy(1, 1)
+        .leastShardAllocationStrategy(3, 1)
         .asInstanceOf[akka.cluster.sharding.internal.LeastShardAllocationStrategy]
     leastShardAllocationNew
   }
 
-  val typeName: String    = TakenDefinitionBucket.TypeKey.name
-  val CoordinatorStateKey =
-    LWWRegisterKey[akka.cluster.sharding.ShardCoordinator.Internal.State](s"${typeName}CoordinatorState")
+  val typeName: String    = TakenDefinition.TypeKey.name
+  val CoordinatorStateKey = LWWRegisterKey[ShardCoordinator.Internal.State](s"${typeName}CoordinatorState")
 
   def shardingStateChanges(ddataShardReplicator: ActorRef, selfHost: String)(implicit
     sys: ActorSystem[_]
@@ -52,7 +52,7 @@ object utils {
 
     src
       .collect { case value @ Replicator.Changed(_) =>
-        val state = value.get(CoordinatorStateKey).value
+        val shardCoordinatorState: ShardCoordinator.Internal.State = value.get(CoordinatorStateKey).value
         new StringBuilder()
           .append("\n")
           // .append("Shards: [")
@@ -63,7 +63,7 @@ object utils {
           // .append("\n")
           .append(s"ShardCoordinatorState($selfHost) updated [ ")
           .append(
-            state.regions
+            shardCoordinatorState.regions
               .map { case (sr, shards) => s"${sr.path.address.host.getOrElse(selfHost)}:[${shards.mkString(",")}]" }
               .mkString(", ")
           )
