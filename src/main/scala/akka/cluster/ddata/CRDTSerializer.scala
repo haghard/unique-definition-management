@@ -18,7 +18,7 @@ final class CRDTSerializer(system: ExtendedActorSystem)
           // State from akka.cluster.sharding.DDataShardCoordinator
           case state: akka.cluster.sharding.ShardCoordinator.Internal.State =>
             system.log.warning("Shards online: {} ", state.shards.keySet.size)
-
+          case _ =>
         }
         super.toBinary(obj)
 

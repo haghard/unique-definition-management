@@ -35,7 +35,8 @@ message Update {
   string owner_id = 1;
   Definition new_definition = 2 [(scalapb.field).no_box = true];
   Definition prev_definition = 3 [(scalapb.field).no_box = true];
-  string replyTo = 4;
+  com.definition.domain.DefinitionLocation prev_definition_location = 4 [(scalapb.field).no_box = true];
+  string replyTo = 5;
 }
 
 message Release {
@@ -43,7 +44,8 @@ message Release {
 
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
-  string replyTo = 3;
+  com.definition.domain.DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
+  string replyTo = 4;
 }
 
 message Passivate {
@@ -60,12 +62,14 @@ message Released {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
+  com.definition.domain.DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
 }
 
 message ReleaseRequested {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
+  com.definition.domain.DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
 }
 
 message Definition {
@@ -78,6 +82,16 @@ message Definition {
   optional string brand = 7;
 }
 
-message TakenDefinitionBucketState {
-  map<string, string> index=1;
+message TakenDefinitionState {
+  map<string, DefinitionMetadata> index=1;
+}
+
+message DefinitionMetadata {
+  string owner_id = 1;
+  int64 seq_num = 2;
+}
+
+message DefinitionLocation {
+  int32 entity_id = 1;
+  int64 seq_num = 2;
 }

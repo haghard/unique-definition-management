@@ -60,6 +60,7 @@ final class DefinitionServiceImpl(
             in.prevDefinition.zipCode,
             in.prevDefinition.brand
           ),
+          in.prevDefinitionLocation,
           actorRefResolver.toSerializationFormat(askReplyTo)
         )
       }

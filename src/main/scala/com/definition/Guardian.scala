@@ -1,7 +1,7 @@
 package com.definition
 
 import akka.actor.RootActorPath
-import akka.actor.typed.scaladsl.AskPattern.{schedulerFromActorSystem, Askable}
+import akka.actor.typed.scaladsl.AskPattern.*
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter.TypedActorSystemOps
 import akka.actor.typed.{ActorRef, ActorRefResolver, ActorSystem, Behavior}
@@ -61,28 +61,21 @@ object Guardian {
                     zipCode = cmd.definition.zipCode,
                     brand = cmd.definition.brand,
                     ownerId = cmd.ownerId,
-                    persistenceId = env.persistenceId,
+                    entityId = env.persistenceId.toInt,
                     sequenceNr = env.sequenceNr,
                     when = env.timestamp
                   )
 
-                AllTables.ownership.acquire(row)
+                Tables.ownership.acquire(row)
 
               case cmd: Released =>
-                AllTables.ownership.release(
-                  name = cmd.definition.name,
-                  address = cmd.definition.address,
-                  city = cmd.definition.city,
-                  country = cmd.definition.country,
-                  state = cmd.definition.state,
-                  zipCode = cmd.definition.zipCode,
-                  brand = cmd.definition.brand,
-                  ownerId = cmd.ownerId
+                Tables.ownership.release(
+                  cmd.prevDefinitionLocation.entityId,
+                  cmd.prevDefinitionLocation.seqNum
                 )
-
-              case ReleaseRequested(ownerId, definition) =>
+              case ReleaseRequested(ownerId, definition, location) =>
                 region.askWithStatus(replyTo =>
-                  com.definition.domain.Release(ownerId, definition, resolver.toSerializationFormat(replyTo))
+                  com.definition.domain.Release(ownerId, definition, location, resolver.toSerializationFormat(replyTo))
                 )
             }
       )
@@ -164,7 +157,7 @@ object Guardian {
                   .shardingStateChanges(ddataShardReplicator, cluster.selfMember.address.host.getOrElse("local"))
               }(system.executionContext)
 
-            AllTables.createAllTables()
+            Tables.createAllTables()
 
             initProjections(region.narrow[com.definition.domain.Release])
 
