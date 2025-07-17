@@ -13,7 +13,6 @@ package com.definition.domain;
 option (scalapb.options) = {
   lenses: true,
   preserve_unknown_fields: false,
-  //retain_source_code_info: true,
   no_default_values_in_constructor: false,
   no_primitive_wrappers: true,
   single_file: true,
@@ -34,8 +33,7 @@ message Update {
 
   string owner_id = 1;
   Definition new_definition = 2 [(scalapb.field).no_box = true];
-  Definition prev_definition = 3 [(scalapb.field).no_box = true];
-  com.definition.domain.DefinitionLocation prev_definition_location = 4 [(scalapb.field).no_box = true];
+  com.definition.domain.DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
   string replyTo = 5;
 }
 
@@ -43,8 +41,7 @@ message Release {
   option (scalapb.message).extends = "Cmd";
 
   string owner_id = 1;
-  Definition definition = 2 [(scalapb.field).no_box = true];
-  com.definition.domain.DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
+  com.definition.domain.DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
   string replyTo = 4;
 }
 
@@ -56,20 +53,19 @@ message Acquired {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
+  int64 version = 3;
 }
 
 message Released {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
-  Definition definition = 2 [(scalapb.field).no_box = true];
-  com.definition.domain.DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
+  com.definition.domain.DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
 }
 
 message ReleaseRequested {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
-  Definition definition = 2 [(scalapb.field).no_box = true];
-  com.definition.domain.DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
+  com.definition.domain.DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
 }
 
 message Definition {

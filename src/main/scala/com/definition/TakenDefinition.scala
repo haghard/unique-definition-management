@@ -27,10 +27,10 @@ object TakenDefinition {
           cmd match {
             case Create(_, definition, _) =>
               math.abs(definition.contentKey.hashCode).toString
-            case Update(_, definition, _, _, _) =>
+            case Update(_, definition, _, _) =>
               math.abs(definition.contentKey.hashCode).toString
-            case Release(_, definition, _, _) =>
-              math.abs(definition.contentKey.hashCode).toString
+            case Release(_, prevDefinitionLocation, _) =>
+              math.abs(prevDefinitionLocation.entityId).toString
             case Passivate() =>
               throw new Exception(s"Unsupported Passivate()")
           }
@@ -67,7 +67,7 @@ object TakenDefinition {
         .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = snapshotEveryNEvents, keepNSnapshots = 2))
         .receiveSignal {
           case (state, RecoveryCompleted) =>
-            ctx.log.warn(s"★★★ RecoveryCompleted $path - ${state.index.values.take(5).mkString(",")}")
+            ctx.log.warn(s"★★★ RecoveryCompleted: - ${state.index.size}")
           case (state, SnapshotCompleted(_)) =>
             ctx.log.info(s"★★★ SnapshotCompleted: ${state.index.size}")
           case (state, SnapshotFailed(_, ex)) =>
@@ -95,7 +95,6 @@ object TakenDefinition {
                 .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
                   if (metadata.ownerId == ownerId) {
                     ctx.log.warn("Ignore duplicate Create")
-
                     StatusReply.success(
                       DefinitionReply(
                         ownerId,
@@ -115,23 +114,22 @@ object TakenDefinition {
                   }
                 }
             case None =>
+              val seqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
               Effect
-                .persist(Acquired(ownerId, definition))
+                .persist(Acquired(ownerId, definition, seqNum))
                 .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
-                  ctx.log.info(
-                    s"Acquired ${definition.name} to $ownerId  Owners:${pbState.index.values.take(3).mkString(",")}"
-                  )
+                  ctx.log.info(s"OwnerId:$ownerId acquired ${definition.name}")
                   StatusReply.success(
                     DefinitionReply(
                       ownerId,
                       DefinitionReply.StatusCode.OK,
-                      DefinitionLocation(entityId, EventSourcedBehavior.lastSequenceNumber(ctx))
+                      DefinitionLocation(entityId, seqNum)
                     )
                   )
                 }
           }
-        case Update(ownerId, definition, prevDefinition, prevDefinitionLocation, replyTo) =>
-          ctx.log.info(s"★★★> Update from ${prevDefinition.name} to ${definition.name}  $ownerId")
+        case Update(ownerId, definition, prevDefinitionLocation, replyTo) =>
+          ctx.log.info(s"★★★> Update ${definition.name}  OwnerId:$ownerId")
 
           pbState.index.get(definition.contentKey) match {
             case Some(metadata) =>
@@ -160,42 +158,36 @@ object TakenDefinition {
                 }
 
             case None =>
+              val seqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
               Effect
                 .persist(
-                  Acquired(ownerId, definition),
-                  ReleaseRequested(ownerId, prevDefinition, prevDefinitionLocation)
+                  Acquired(ownerId, definition, seqNum),
+                  ReleaseRequested(ownerId, prevDefinitionLocation)
                 )
                 .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
                   StatusReply.success(
                     DefinitionReply(
                       ownerId,
                       DefinitionReply.StatusCode.OK,
-                      DefinitionLocation(entityId, EventSourcedBehavior.lastSequenceNumber(ctx) - 1)
+                      DefinitionLocation(entityId, seqNum)
                     )
                   )
                 }
           }
 
-        case Release(ownerId, prevDefinition, prevDefinitionLocation, replyTo) =>
-          ctx.log.info(s"★★★> Release old_definition  OwnerId:$ownerId")
-          pbState.index.get(prevDefinition.contentKey) match {
-            case Some(metadata) =>
-              if (metadata.ownerId == ownerId)
-                Effect
-                  .persist(Released(ownerId, prevDefinition, prevDefinitionLocation))
-                  .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
-                    ctx.log.warn(s"Released old_definition for $ownerId")
-                    StatusReply.success(Done)
-                  }
-              else
-                Effect
-                  .none[PbEvent, TakenDefinitionState]
-                  .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
-                    ctx.log.warn(
-                      s"Failed to release payload: Wrong owner actual: ${metadata.ownerId} expected:$ownerId"
-                    )
-                    StatusReply.success(Done)
-                  }
+        case Release(ownerId, prevDefinitionLocation, replyTo) =>
+          ctx.log.info(s"★★★ ${ctx.self.path.toStringWithoutAddress} Release old_definition  OwnerId:$ownerId")
+
+          pbState.index.collectFirst {
+            case (_, md) if md.seqNum == prevDefinitionLocation.seqNum && md.ownerId == ownerId => md
+          } match {
+            case Some(_) =>
+              Effect
+                .persist(Released(ownerId, prevDefinitionLocation))
+                .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
+                  ctx.log.warn(s"Released old_definition for $ownerId")
+                  StatusReply.success(Done)
+                }
 
             case None =>
               Effect
@@ -216,13 +208,20 @@ object TakenDefinition {
 
     def applyEvt(event: PbEvent)(implicit ctx: ActorContext[PbCmd]): TakenDefinitionState =
       event match {
-        case Acquired(ownerId, definition) =>
-          val md = DefinitionMetadata(ownerId, EventSourcedBehavior.lastSequenceNumber(ctx) + 1)
-          val updatedMap = pbState.index + (definition.contentKey -> md)
-          pbState.update(_.index := updatedMap)
-        case Released(_, definition, _) =>
-          val updatedMap = pbState.index - definition.contentKey
-          pbState.update(_.index := updatedMap)
+        case Acquired(ownerId, definition, v) =>
+          val updatedIndex = pbState.index + (definition.contentKey -> DefinitionMetadata(ownerId, v))
+          pbState.update(_.index := updatedIndex)
+        case Released(ownerId, prevDefinitionLocation) =>
+          val definitionContentKey =
+            pbState.index
+              .collectFirst {
+                case (contentKey, md) if md.seqNum == prevDefinitionLocation.seqNum && md.ownerId == ownerId =>
+                  contentKey
+              }
+              .getOrElse("n")
+
+          val updatedIndex = pbState.index - definitionContentKey
+          pbState.update(_.index := updatedIndex)
         case _: ReleaseRequested =>
           pbState
       }

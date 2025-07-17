@@ -35,9 +35,7 @@ message UpdateDefinitionRequest {
   option (scalapb.message).extends = "DefinitionRequest";
   string owner_id = 1;
   com.definition.domain.Definition new_definition = 2 [(scalapb.field).no_box = true];
-
-  com.definition.domain.Definition prev_definition = 3 [(scalapb.field).no_box = true];
-  com.definition.domain.DefinitionLocation prev_definition_location = 4 [(scalapb.field).no_box = true];
+  com.definition.domain.DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
 }
 
 

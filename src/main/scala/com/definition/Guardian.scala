@@ -42,6 +42,17 @@ object Guardian {
     // PersistenceQuery(system).readJournalFor[JdbcReadJournal](JdbcReadJournal.Identifier)
     val resolver: ActorRefResolver = ActorRefResolver(system)
     implicit val to                = akka.util.Timeout(3.seconds)
+
+    /*SlickProjection
+      .groupedWithin(
+        ProjectionId(name, tag),
+        EventSourcedProvider.eventsByTag[PbEvent](system, JdbcReadJournal.Identifier, tag),
+        dbConfig,
+        () => ???
+      )
+      .withGroup(groupAfterEnvelopes = 10, groupAfterDuration = 300.millis)
+     */
+
     SlickProjection
       .atLeastOnceAsync(
         ProjectionId(name, tag),
@@ -73,12 +84,14 @@ object Guardian {
                   cmd.prevDefinitionLocation.entityId,
                   cmd.prevDefinitionLocation.seqNum
                 )
-              case ReleaseRequested(ownerId, definition, location) =>
+              case ReleaseRequested(ownerId, /*definition,*/ prevDefinitionLocation) =>
                 region.askWithStatus(replyTo =>
-                  com.definition.domain.Release(ownerId, definition, location, resolver.toSerializationFormat(replyTo))
+                  com.definition.domain
+                    .Release(ownerId, /*definition,*/ prevDefinitionLocation, resolver.toSerializationFormat(replyTo))
                 )
             }
       )
+      .withSaveOffset(afterEnvelopes = 10, afterDuration = 500.millis)
   }
 
   def initProjections(region: ActorRef[com.definition.domain.Release])(implicit system: ActorSystem[_]): Unit = {

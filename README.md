@@ -34,30 +34,24 @@ grpcurl -d '{"definition":{"name":"bbb1","address":"a","city":"FL","state":"FL",
 grpcurl -d '{"definition":{"name":"ccc1","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd","brand":"my-brand"},"owner_id":"ccc367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Create
 grpcurl -d '{"definition":{"name":"eee567","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"eee367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Create
 
-
 1)
-
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"jjj367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Create
-grpcurl -d '{"prev_definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"prev_definition_location":{"entityId": 739737633,"seqNum": "1"}, "new_definition":{"name":"ff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"}, "owner_id":"jjj367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Update
+grpcurl -d '{"prev_definition_location":{"entityId": 739737633,"seqNum": "1"}, "new_definition":{"name":"ff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"}, "owner_id":"jjj367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Update
 
 
 2)
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"xxx367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Create
-grpcurl -d '{"prev_definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"prev_definition_location":{"entityId": 739737633,"seqNum": "3"}, "new_definition":{"name":"qqq13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"}, "owner_id":"xxx367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Update
+grpcurl -d '{"prev_definition_location":{"entityId":739737633,"seqNum":"3"},"new_definition":{"name":"qqq13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"}, "owner_id":"xxx367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Update
 
 
 3)
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"zzz367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Create
-grpcurl -d '{"prev_definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"prev_definition_location":{"entityId": 739737633,"seqNum": "5"}, "new_definition":{"name":"sdfsdfhsdh","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"}, "owner_id":"zzz367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Update
+grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"bnm367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Create
+grpcurl -d '{"prev_definition_location":{"entityId":739737633,"seqNum":"5"},"new_definition":{"name":"34557385656gjf","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"}, "owner_id":"bnm367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Update
+
 
 4)
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"aaa367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Create
-grpcurl -d '{"prev_definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"prev_definition_location":{"entityId": 739737633,"seqNum": "7"}, "new_definition":{"name":"stuio78hfgfgh","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"}, "owner_id":"aaa367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Update
+grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"pvb367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Create
+grpcurl -d '{"prev_definition_location":{"entityId":739737633,"seqNum":"7"},"new_definition":{"name":"5656gjf","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"}, "owner_id":"pvb367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Update
 
-
-5)
-
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"vvv367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Create
-grpcurl -d '{"prev_definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"prev_definition_location":{"entityId": 739737633,"seqNum": "9"}, "new_definition":{"name":"3456345734573xcg","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"}, "owner_id":"vvv367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/Update
 
 ```

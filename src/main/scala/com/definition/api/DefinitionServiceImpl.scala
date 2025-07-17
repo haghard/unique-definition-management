@@ -51,15 +51,6 @@ final class DefinitionServiceImpl(
             in.newDefinition.zipCode,
             in.newDefinition.brand
           ),
-          prevDefinition = Definition(
-            in.prevDefinition.name,
-            in.prevDefinition.address,
-            in.prevDefinition.city,
-            in.prevDefinition.country,
-            in.prevDefinition.state,
-            in.prevDefinition.zipCode,
-            in.prevDefinition.brand
-          ),
           in.prevDefinitionLocation,
           actorRefResolver.toSerializationFormat(askReplyTo)
         )

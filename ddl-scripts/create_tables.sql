@@ -1,4 +1,4 @@
-#https://github.com/akka/akka-persistence-jdbc/blob/v5.0.4/core/src/main/resources/schema/postgres/postgres-create-schema.sql
+//https://github.com/akka/akka-persistence-jdbc/blob/v5.0.4/core/src/main/resources/schema/postgres/postgres-create-schema.sql
 
 CREATE TABLE IF NOT EXISTS event_journal(
     ordering SERIAL PRIMARY KEY,
@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS snapshot (
 );
 
 
+//https://doc.akka.io/libraries/akka-projection/current/slick.html#schema
 CREATE TABLE IF NOT EXISTS akka_projection_offset_store (
     projection_name VARCHAR(255) NOT NULL,
     projection_key VARCHAR(255) NOT NULL,
