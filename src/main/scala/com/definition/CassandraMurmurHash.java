@@ -2,7 +2,7 @@ package com.definition;
 
 import java.nio.ByteBuffer;
 
-public class MurmurHash {
+public class CassandraMurmurHash {
 
   public static long hash2_64(ByteBuffer key, int offset, int length, long seed) {
     long m64 = 0xc6a4a7935bd1e995L;

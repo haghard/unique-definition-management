@@ -82,13 +82,17 @@ object Guardian {
                 Tables.ownership.acquire(row)
 
               case cmd: Released =>
+                /*Tables.ownership.releaseF(
+                  cmd.prevDefinitionLocation.entityId,
+                  cmd.prevDefinitionLocation.seqNum
+                )*/
                 Tables.ownership.release(
                   cmd.prevDefinitionLocation.entityId,
                   cmd.prevDefinitionLocation.seqNum
                 )
 
-              // RemoteReleaseRequested
               case ReleaseRequested(ownerId, prevDefinitionLocation) =>
+                // Future.failed(new Exception(s"Boom !!!"))
                 region.askWithStatus(replyTo =>
                   com.definition.domain
                     .Release(ownerId, prevDefinitionLocation, resolver.toSerializationFormat(replyTo))
@@ -158,7 +162,7 @@ object Guardian {
             val region: ActorRef[com.definition.domain.Cmd] =
               clusterSharding
                 .init(
-                  Entity(TakenDefinition.TypeKey)(TakenDefinition(_))
+                  Entity(TakenDefinition.TypeKey)(TakenDefinition(_, snapshotEveryNEvents = 10))
                     .withMessageExtractor(TakenDefinition.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.definition.domain.Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())

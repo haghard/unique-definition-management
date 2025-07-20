@@ -24,6 +24,7 @@ final case class DefinitionOwnershipRow(
 )
 
 class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
+
   import profile.api._
 
   class Ownership(tag: Tag) extends Table[DefinitionOwnershipRow](tag, "OWNERSHIP") {
@@ -62,12 +63,18 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
   object ownership extends TableQuery(new Ownership(_)) {
     self =>
 
-    val getByOwnerId = Compiled { (ownerId: Rep[String]) =>
+    val getLocationByOwnerId = Compiled { (ownerId: Rep[String]) =>
       self.filter(_.ownerId === ownerId).map(rep => (rep.entityId, rep.sequenceNr))
     }
 
+    def locationByOwnerId(ownerId: String): Future[Seq[(Long, Long)]] =
+      db.run(getLocationByOwnerId(ownerId).result)
+
     def acquire(row: DefinitionOwnershipRow): Future[Done] =
       db.run(ownership.insertOrUpdate(row)).map(_ => Done)(ExecutionContext.parasitic)
+
+    def releaseFailed(entityId: Long, seqNum: Long): Future[Done] =
+      db.run(DBIO.from(Future.failed(new Exception(s"Boom($entityId,$seqNum) !!!"))))
 
     def release(entityId: Long, seqNum: Long): Future[Done] =
       db
@@ -79,7 +86,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
   val ddl: profile.DDL = tables.map(_.schema).reduce(_ ++ _)
 
   private val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
-  val db       = {
+  val db               = {
     val local = dbConfig.db
     val md    = local.source.createConnection().getMetaData()
     (1 to 8).foreach(i => println(s"Supports $i = " + md.supportsTransactionIsolationLevel(i)))
@@ -90,12 +97,9 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     local
   }
 
-  def createAllTables()(implicit sys: ActorSystem[_]): Future[Unit] =
-    SlickProjection
-      .createTablesIfNotExists(dbConfig)
-      .flatMap { _ =>
-        db.run(ddl.createIfNotExists)
-      }(ExecutionContext.parasitic)
+  def createAllTables()(implicit sys: ActorSystem[_]): Future[Done] =
+    db.run(ddl.createIfNotExists)
+      .flatMap(_ => SlickProjection.createTablesIfNotExists(dbConfig))(ExecutionContext.parasitic)
 }
 
 object Tables extends SlickTablesGeneric(slick.jdbc.MySQLProfile)
