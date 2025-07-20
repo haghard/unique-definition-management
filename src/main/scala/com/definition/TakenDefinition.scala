@@ -16,6 +16,9 @@ import Implicits.*
 import com.definition.domain.Cmd as PbCmd
 import com.definition.domain.Event as PbEvent
 
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
+
 object TakenDefinition {
 
   val TypeKey: EntityTypeKey[PbCmd] = EntityTypeKey[PbCmd](name = "tkn-dfn")
@@ -26,17 +29,20 @@ object TakenDefinition {
         override def entityId(cmd: PbCmd): String =
           cmd match {
             case Create(_, definition, _) =>
-              math.abs(definition.contentKey.hashCode).toString
+              // math.abs(definition.contentKey.hashCode).toString
+              val bts = ByteBuffer.wrap(definition.contentKey.getBytes(StandardCharsets.UTF_8))
+              MurmurHash.hash2_64(bts, 0, bts.array.length, akka.util.HashCode.SEED).toString
             case Update(_, definition, _, _) =>
-              math.abs(definition.contentKey.hashCode).toString
+              val bts = ByteBuffer.wrap(definition.contentKey.getBytes(StandardCharsets.UTF_8))
+              MurmurHash.hash2_64(bts, 0, bts.array.length, akka.util.HashCode.SEED).toString
             case Release(_, prevDefinitionLocation, _) =>
-              math.abs(prevDefinitionLocation.entityId).toString
+              prevDefinitionLocation.entityId.toString
             case Passivate() =>
               throw new Exception(s"Unsupported Passivate()")
           }
 
         override def shardId(entityId: String): String =
-          math.abs(entityId.toInt % numberOfShards).toString
+          math.abs(entityId.toLong % numberOfShards).toString
 
         override def unwrapMessage(cmd: PbCmd): PbCmd = cmd
       }
@@ -47,7 +53,7 @@ object TakenDefinition {
       implicit val refResolver: ActorRefResolver = ActorRefResolver(ctx.system)
 
       val path     = ctx.self.path
-      val entityId = path.elements.last.toInt
+      val entityId = path.elements.last.toLong
 
       EventSourcedBehavior
         .withEnforcedReplies[PbCmd, PbEvent, TakenDefinitionState](
@@ -83,7 +89,7 @@ object TakenDefinition {
   implicit class TakenDefinitionStateOps(val pbState: TakenDefinitionState) extends AnyVal {
     def applyCmd(
       cmd: PbCmd,
-      entityId: Int
+      entityId: Long
     )(implicit ctx: ActorContext[PbCmd], resolver: ActorRefResolver): ReplyEffect[PbEvent, TakenDefinitionState] =
       cmd match {
         case Create(ownerId, definition, replyTo) =>
@@ -208,10 +214,11 @@ object TakenDefinition {
 
     def applyEvt(event: PbEvent)(implicit ctx: ActorContext[PbCmd]): TakenDefinitionState =
       event match {
-        case Acquired(ownerId, definition, v) =>
-          val updatedIndex = pbState.index + (definition.contentKey -> DefinitionMetadata(ownerId, v))
+        case Acquired(ownerId, definition, seqNum) =>
+          val updatedIndex = pbState.index + (definition.contentKey -> DefinitionMetadata(ownerId, seqNum))
           pbState.update(_.index := updatedIndex)
         case Released(ownerId, prevDefinitionLocation) =>
+
           val definitionContentKey =
             pbState.index
               .collectFirst {

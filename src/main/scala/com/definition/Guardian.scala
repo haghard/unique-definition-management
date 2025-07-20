@@ -56,6 +56,7 @@ object Guardian {
     SlickProjection
       .atLeastOnceAsync(
         ProjectionId(name, tag),
+        // EventSourcedProvider.eventsBySlices()
         EventSourcedProvider.eventsByTag[PbEvent](system, JdbcReadJournal.Identifier, tag),
         dbConfig,
         () =>
@@ -72,8 +73,9 @@ object Guardian {
                     zipCode = cmd.definition.zipCode,
                     brand = cmd.definition.brand,
                     ownerId = cmd.ownerId,
-                    entityId = env.persistenceId.toInt,
-                    sequenceNr = env.sequenceNr,
+                    entityId = env.persistenceId.toLong,
+                    sequenceNr = cmd.seqNum,
+                    // sequenceNr = env.sequenceNr,
                     when = env.timestamp
                   )
 
@@ -84,10 +86,12 @@ object Guardian {
                   cmd.prevDefinitionLocation.entityId,
                   cmd.prevDefinitionLocation.seqNum
                 )
-              case ReleaseRequested(ownerId, /*definition,*/ prevDefinitionLocation) =>
+
+              // RemoteReleaseRequested
+              case ReleaseRequested(ownerId, prevDefinitionLocation) =>
                 region.askWithStatus(replyTo =>
                   com.definition.domain
-                    .Release(ownerId, /*definition,*/ prevDefinitionLocation, resolver.toSerializationFormat(replyTo))
+                    .Release(ownerId, prevDefinitionLocation, resolver.toSerializationFormat(replyTo))
                 )
             }
       )

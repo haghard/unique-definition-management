@@ -53,7 +53,7 @@ message Acquired {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
-  int64 version = 3;
+  int64 seq_num = 3;
 }
 
 message Released {
@@ -88,6 +88,6 @@ message DefinitionMetadata {
 }
 
 message DefinitionLocation {
-  int32 entity_id = 1;
+  int64 entity_id = 1;
   int64 seq_num = 2;
 }

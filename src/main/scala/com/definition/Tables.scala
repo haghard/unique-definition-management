@@ -1,11 +1,11 @@
 package com.definition
 
 import akka.Done
+import akka.actor.typed.ActorSystem
+import akka.projection.slick.SlickProjection
 import slick.basic.DatabaseConfig
-import slick.jdbc.{GetResult, MySQLProfile}
+import slick.jdbc.MySQLProfile
 
-import java.nio.ByteBuffer
-import java.util.UUID
 import scala.concurrent.*
 import scala.util.Using
 
@@ -18,19 +18,13 @@ final case class DefinitionOwnershipRow(
   zipCode: Option[String],
   brand: Option[String],
   ownerId: String,
-  entityId: Int,
+  entityId: Long,
   sequenceNr: Long,
   when: Long
 )
 
 class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
-
   import profile.api._
-
-  implicit val _: GetResult[UUID] = GetResult { rs =>
-    val bts = ByteBuffer.wrap(rs.nextBytes())
-    new UUID(bts.getLong(), bts.getLong())
-  }
 
   class Ownership(tag: Tag) extends Table[DefinitionOwnershipRow](tag, "OWNERSHIP") {
 
@@ -50,7 +44,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
 
     def ownerId: Rep[String] = column[String]("OWNER_ID", O.Length(36))
 
-    def entityId: Rep[Int] = column[Int]("ENTITY_ID")
+    def entityId: Rep[Long] = column[Long]("ENTITY_ID")
 
     def sequenceNr: Rep[Long] = column[Long]("SEQ_NUM")
 
@@ -69,17 +63,13 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     self =>
 
     val getByOwnerId = Compiled { (ownerId: Rep[String]) =>
-      self.filter(_.ownerId === ownerId)
-    }
-
-    val getByName = Compiled { (name: Rep[String]) =>
-      self.filter(_.name === name)
+      self.filter(_.ownerId === ownerId).map(rep => (rep.entityId, rep.sequenceNr))
     }
 
     def acquire(row: DefinitionOwnershipRow): Future[Done] =
-      db.run(ownership.+=(row)).map(_ => Done)(ExecutionContext.parasitic)
+      db.run(ownership.insertOrUpdate(row)).map(_ => Done)(ExecutionContext.parasitic)
 
-    def release(entityId: Int, seqNum: Long): Future[Done] =
+    def release(entityId: Long, seqNum: Long): Future[Done] =
       db
         .run(ownership.filter(rep => rep.entityId === entityId && rep.sequenceNr === seqNum).delete)
         .map(_ => Done)(ExecutionContext.parasitic)
@@ -88,10 +78,10 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
   val tables           = Seq(ownership)
   val ddl: profile.DDL = tables.map(_.schema).reduce(_ ++ _)
 
-  val db = {
-    val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
-    val local    = dbConfig.db
-    val md       = local.source.createConnection().getMetaData()
+  private val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
+  val db       = {
+    val local = dbConfig.db
+    val md    = local.source.createConnection().getMetaData()
     (1 to 8).foreach(i => println(s"Supports $i = " + md.supportsTransactionIsolationLevel(i)))
     Using.resource(local.source.createConnection()) { con =>
       println("Active TransactionIsolation:" + con.getTransactionIsolation()) // 4 - TRANSACTION_REPEATABLE_READ
@@ -100,9 +90,12 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     local
   }
 
-  def createAllTables(): Future[Unit] =
-    db.run(ddl.createIfNotExists)
-
+  def createAllTables()(implicit sys: ActorSystem[_]): Future[Unit] =
+    SlickProjection
+      .createTablesIfNotExists(dbConfig)
+      .flatMap { _ =>
+        db.run(ddl.createIfNotExists)
+      }(ExecutionContext.parasitic)
 }
 
 object Tables extends SlickTablesGeneric(slick.jdbc.MySQLProfile)

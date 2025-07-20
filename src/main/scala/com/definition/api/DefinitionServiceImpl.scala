@@ -5,7 +5,6 @@ import akka.actor.typed.scaladsl.AskPattern.Askable
 
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
-
 import com.definition.domain.*
 import com.definition.domain.Cmd as PbCmd
 
@@ -38,8 +37,9 @@ final class DefinitionServiceImpl(
       }
 
   override def update(in: UpdateDefinitionRequest): Future[DefinitionReply] =
+    //  com.definition.Tables.ownership.getByOwnerId(in.ownerId)
     shardRegion
-      .askWithStatus[DefinitionReply] { askReplyTo =>
+      .askWithStatus[DefinitionReply] { replyTo =>
         Update(
           in.ownerId,
           newDefinition = Definition(
@@ -52,7 +52,7 @@ final class DefinitionServiceImpl(
             in.newDefinition.brand
           ),
           in.prevDefinitionLocation,
-          actorRefResolver.toSerializationFormat(askReplyTo)
+          actorRefResolver.toSerializationFormat(replyTo)
         )
       }
 }
