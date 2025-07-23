@@ -48,7 +48,7 @@ object TakenDefinition {
       }
   }
 
-  def apply(entityCtx: EntityContext[PbCmd], snapshotEveryNEvents: Int = 5): Behavior[PbCmd] =
+  def apply(entityCtx: EntityContext[PbCmd], snapshotEveryN: Int = 5): Behavior[PbCmd] =
     Behaviors.setup { implicit ctx =>
       implicit val refResolver: ActorRefResolver = ActorRefResolver(ctx.system)
 
@@ -64,13 +64,13 @@ object TakenDefinition {
         )
         .withTagger(_ => Set(math.abs(entityId % Guardian.numberOfTags).toString))
         .snapshotWhen { case (_, _, sequenceNr) =>
-          val ifSnap = sequenceNr % snapshotEveryNEvents == 0
+          val ifSnap = sequenceNr % snapshotEveryN == 0
           if (ifSnap)
             ctx.log.info(s"Snapshot {}", sequenceNr)
 
           ifSnap
         }
-        .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = snapshotEveryNEvents, keepNSnapshots = 2))
+        .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = snapshotEveryN, keepNSnapshots = 2))
         .receiveSignal {
           case (state, RecoveryCompleted) =>
             ctx.log.warn(s"★★★ RecoveryCompleted: - ${state.contentKeySeqNum.size}")

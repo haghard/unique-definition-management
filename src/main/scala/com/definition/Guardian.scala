@@ -66,12 +66,13 @@ object Guardian {
                 val row =
                   DefinitionOwnershipRow(
                     name = cmd.definition.name,
-                    address = cmd.definition.address,
+                    definition = cmd.definition,
+                    /*address = cmd.definition.address,
                     city = cmd.definition.city,
                     country = cmd.definition.country,
                     state = cmd.definition.state,
                     zipCode = cmd.definition.zipCode,
-                    brand = cmd.definition.brand,
+                    brand = cmd.definition.brand,*/
                     ownerId = cmd.ownerId,
                     entityId = env.persistenceId.toLong,
                     sequenceNr = cmd.seqNum,
@@ -140,29 +141,10 @@ object Guardian {
             val shardingSettings = ClusterShardingSettings(system)
             val clusterSharding  = ClusterSharding(system)
 
-            /*val region: ActorRef[com.definition.domain.Cmd] =
-              clusterSharding
-                .init(
-                  Entity(TakenDefinitionBucket.TypeKey)(TakenDefinitionBucket(_))
-                    .withMessageExtractor(TakenDefinitionBucket.Extractor(commonSettings.numberOfShards))
-                    .withStopMessage(com.definition.domain.Passivate())
-                    .withAllocationStrategy(
-                      utils.newLeastShardAllocationStrategy()
-                      // akka.cluster.sharding.ShardCoordinator.ShardAllocationStrategy.leastShardAllocationStrategy(TakenDefinitionBucket.NumOfShards / 2, 0.2)
-                    )
-                    .withSettings(
-                      ClusterShardingSettings(system)
-                        .withPassivationStrategy(
-                          akka.cluster.sharding.typed.ClusterShardingSettings.PassivationStrategySettings.defaults
-                            .withIdleEntityPassivation(60.seconds)
-                        )
-                    )
-                )*/
-
             val region: ActorRef[com.definition.domain.Cmd] =
               clusterSharding
                 .init(
-                  Entity(TakenDefinition.TypeKey)(TakenDefinition(_, snapshotEveryNEvents = 10))
+                  Entity(TakenDefinition.TypeKey)(TakenDefinition(_, snapshotEveryN = 10))
                     .withMessageExtractor(TakenDefinition.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.definition.domain.Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())

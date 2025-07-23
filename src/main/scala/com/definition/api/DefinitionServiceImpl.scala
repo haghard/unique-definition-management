@@ -20,30 +20,64 @@ final class DefinitionServiceImpl(
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
   override def create(in: CreateRequest): Future[DefinitionReply] =
-    shardRegion
-      .askWithStatus[DefinitionReply] { askReplyTo =>
-        Create(
-          in.ownerId,
-          Definition(
-            in.definition.name,
-            in.definition.address,
-            in.definition.city,
-            in.definition.country,
-            in.definition.state,
-            in.definition.zipCode,
-            in.definition.brand
-          ),
-          actorRefResolver.toSerializationFormat(askReplyTo)
-        )
-      }
+    Tables.ownership
+      .definitionByOwnerId(in.ownerId)
+      .flatMap { rows =>
+        rows.size match {
+          case 0 =>
+            shardRegion
+              .askWithStatus[DefinitionReply] { askReplyTo =>
+                Create(
+                  in.ownerId,
+                  Definition(
+                    in.definition.name,
+                    in.definition.address,
+                    in.definition.city,
+                    in.definition.country,
+                    in.definition.state,
+                    in.definition.zipCode,
+                    in.definition.brand
+                  ),
+                  actorRefResolver.toSerializationFormat(askReplyTo)
+                )
+              }
+          case 1 =>
+            val (entityId, seqNum, existingDefinition) = rows(0)
+            if (existingDefinition == in.definition) {
+              Future.successful(
+                DefinitionReply(
+                  in.ownerId,
+                  DefinitionReply.StatusCode.OK,
+                  DefinitionLocation(entityId, seqNum)
+                )
+              )
+            } else {
+              Future.successful(
+                DefinitionReply(
+                  in.ownerId,
+                  com.definition.api.DefinitionReply.StatusCode.IllegalCreate,
+                  DefinitionLocation()
+                )
+              )
+            }
+          case _ =>
+            Future.successful(
+              DefinitionReply(
+                in.ownerId,
+                com.definition.api.DefinitionReply.StatusCode.IllegalCreate,
+                DefinitionLocation()
+              )
+            )
+        }
+      }(system.executionContext)
 
   override def update(in: UpdateDefinitionRequest): Future[DefinitionReply] =
     Tables.ownership
-      .locationByOwnerId(in.ownerId)
+      .definitionByOwnerId(in.ownerId)
       .flatMap { rows =>
         rows.size match {
           case 1 =>
-            val (entityId, seqNum) = rows.head
+            val (entityId, seqNum, _) = rows(0)
             shardRegion
               .askWithStatus[DefinitionReply] { replyTo =>
                 Update(
@@ -70,9 +104,9 @@ final class DefinitionServiceImpl(
               )
             )
           case _ =>
-            // Due to async req/resp cycles (we send out our DefinitionReply back without waiting for all state changes), the "Realise" step happens asynchronously.
+            // When we process a `UpdateDefinitionRequest`, we send out our DefinitionReply back without waiting for all state changes. ("Realise" happens asynchronously)
             // If you see more than 1 row here, it indicates that the projection layer hasn't applied N (where N > 1) previous updates yet by this owner_id.
-            // We don't want to proceed if that happens.
+            // We want to detect.
             Future.successful(
               DefinitionReply(
                 in.ownerId,

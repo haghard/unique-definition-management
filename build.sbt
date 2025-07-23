@@ -22,8 +22,6 @@ lazy val root = (project in file("."))
   .enablePlugins(AkkaGrpcPlugin)
 
 val AmmoniteVersion = "3.0.2"
-
-
 val akkaPersistenceJdbcV = "5.0.4"
 val projectionV = "1.2.5"
 
@@ -82,7 +80,7 @@ Compile / scalacOptions ++= Seq(
   "-Xmigration" //Emit migration warnings under -Xsource:3 as fatal warnings, not errors; -Xmigration disables fatality (#10439 by @som-snytt, #10511)
 )
 
-Compile / javacOptions ++= Seq("-Xlint:unchecked", "-Xlint:deprecation", "-parameters") // for Jackson
+Compile / javacOptions ++= Seq("-Xlint:unchecked", "-Xlint:deprecation", "-parameters")
 
 scalafmtOnCompile := true
 

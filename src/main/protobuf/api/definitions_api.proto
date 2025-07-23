@@ -50,5 +50,6 @@ message DefinitionReply {
     Reserved = 2;
     NotFound = 3;
     IllegalState = 4;
+    IllegalCreate = 5;
   }
 }
