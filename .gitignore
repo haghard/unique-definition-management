@@ -1,5 +1,6 @@
 .bsp
 .idea
+project/*
 project/target
 project/project
 target
