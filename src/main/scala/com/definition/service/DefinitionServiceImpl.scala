@@ -1,13 +1,13 @@
-package com.definition.api
+package com.definition.service
 
 import akka.actor.typed.*
 import akka.actor.typed.scaladsl.AskPattern.Askable
+import com.definition.Tables
+import com.definition.service.*
+import com.definition.domain.{Cmd as PbCmd, *}
 
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
-import com.definition.domain.*
-import com.definition.Tables
-import com.definition.domain.Cmd as PbCmd
 
 final class DefinitionServiceImpl(
   shardRegion: ActorRef[PbCmd]
@@ -19,6 +19,7 @@ final class DefinitionServiceImpl(
 
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
+  // "Create" should be called only once by a given ownerId
   override def create(in: CreateRequest): Future[DefinitionReply] =
     Tables.ownership
       .definitionByOwnerId(in.ownerId)
@@ -55,8 +56,8 @@ final class DefinitionServiceImpl(
               Future.successful(
                 DefinitionReply(
                   in.ownerId,
-                  com.definition.api.DefinitionReply.StatusCode.IllegalCreate,
-                  DefinitionLocation()
+                  DefinitionReply.StatusCode.IllegalCreate_UseThisLocation,
+                  DefinitionLocation(entityId, seqNum)
                 )
               )
             }
@@ -64,7 +65,7 @@ final class DefinitionServiceImpl(
             Future.successful(
               DefinitionReply(
                 in.ownerId,
-                com.definition.api.DefinitionReply.StatusCode.IllegalCreate,
+                DefinitionReply.StatusCode.IllegalCreateTryLater,
                 DefinitionLocation()
               )
             )
@@ -73,44 +74,55 @@ final class DefinitionServiceImpl(
 
   override def update(in: UpdateDefinitionRequest): Future[DefinitionReply] =
     Tables.ownership
-      .definitionByOwnerId(in.ownerId)
+      .locationByOwnerId(in.ownerId)
       .flatMap { rows =>
         rows.size match {
-          case 1 =>
-            val (entityId, seqNum, _) = rows(0)
-            shardRegion
-              .askWithStatus[DefinitionReply] { replyTo =>
-                Update(
-                  in.ownerId,
-                  Definition(
-                    in.definition.name,
-                    in.definition.address,
-                    in.definition.city,
-                    in.definition.country,
-                    in.definition.state,
-                    in.definition.zipCode,
-                    in.definition.brand
-                  ),
-                  DefinitionLocation(entityId, seqNum),
-                  actorRefResolver.toSerializationFormat(replyTo)
-                )
-              }
           case 0 =>
+            // retry
             Future.successful(
               DefinitionReply(
                 in.ownerId,
-                com.definition.api.DefinitionReply.StatusCode.NotFound,
+                DefinitionReply.StatusCode.NotFound,
                 DefinitionLocation()
               )
             )
+          case 1 =>
+            val (entityId, seqNum) = rows(0)
+            if (in.definitionLocation.entityId == entityId && in.definitionLocation.seqNum == seqNum) {
+              shardRegion
+                .askWithStatus[DefinitionReply] { replyTo =>
+                  Update(
+                    in.ownerId,
+                    Definition(
+                      in.definition.name,
+                      in.definition.address,
+                      in.definition.city,
+                      in.definition.country,
+                      in.definition.state,
+                      in.definition.zipCode,
+                      in.definition.brand
+                    ),
+                    DefinitionLocation(in.definitionLocation.entityId, in.definitionLocation.seqNum),
+                    actorRefResolver.toSerializationFormat(replyTo)
+                  )
+                }
+            } else {
+              Future.successful(
+                DefinitionReply(
+                  in.ownerId,
+                  DefinitionReply.StatusCode.StaleUpdate_UseThisLocation,
+                  DefinitionLocation(entityId, seqNum)
+                )
+              )
+            }
           case _ =>
-            // When we process a `UpdateDefinitionRequest`, we send out our DefinitionReply back without waiting for all state changes. ("Realise" happens asynchronously)
+            // When we process a `UpdateDefinitionRequest`, we send out our DefinitionReply back without waiting for all state changes. 'Realise' happens asynchronously.
             // If you see more than 1 row here, it indicates that the projection layer hasn't applied N (where N > 1) previous updates yet by this owner_id.
             // We want to detect.
             Future.successful(
               DefinitionReply(
                 in.ownerId,
-                com.definition.api.DefinitionReply.StatusCode.IllegalState,
+                DefinitionReply.StatusCode.IllegalStateTryLater,
                 DefinitionLocation()
               )
             )
