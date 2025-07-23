@@ -78,15 +78,15 @@ message Definition {
   optional string brand = 7;
 }
 
-//2 Levels of harding:
+//2 Levels of sharding:
 //a) akka-cluster sharding [Long.min...Long.max]
-//b) we need to introduce another level of hashing to deal with hash collisions. We need an inner map of (contentKey -> seq_num)
+//b) we need to introduce another level of hashing to deal with hash collisions. Use a map of (contentKey -> seq_num)
 message TakenDefinitionState {
   //Inner map (contentKey->seq_num) to accommodate for hash collisions
-  map<string, int64> contentKeySeqNum=1;
+  map<string, int64> contentKey_seqNum = 1;
 
-  //seq_num, ownerId
-  //map<int64, string> seqNumContentKey=1;
+  //seq_num -> owner_id
+  //map<int64, string> ownerIdSeqNum = 2;
 }
 
 message DefinitionLocation {

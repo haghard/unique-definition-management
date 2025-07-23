@@ -6,7 +6,8 @@ import akka.actor.CoordinatedShutdown
 import akka.actor.CoordinatedShutdown.*
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
-import com.definition.api.*
+import com.definition.service.*
+import com.definition.service.DefinitionServiceImpl
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.Future

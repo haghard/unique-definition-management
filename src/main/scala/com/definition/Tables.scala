@@ -68,7 +68,13 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     def ownerIdIndex: slick.lifted.Index = index("OWNERSHIP__OWNER_ID_IND", ownerId)
 
     def * : slick.lifted.ProvenShape[DefinitionOwnershipRow] =
-      (name, definition, /*address, city, country, state, zipCode, brand,*/ ownerId, takenDefinitionEntityId, sequenceNr, when) <>
+      (
+        name,
+        definition, /*address, city, country, state, zipCode, brand,*/ ownerId,
+        takenDefinitionEntityId,
+        sequenceNr,
+        when
+      ) <>
         ((DefinitionOwnershipRow.apply _).tupled, DefinitionOwnershipRow.unapply)
   }
 
@@ -79,7 +85,14 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
       self.filter(_.ownerId === ownerId).map(rep => (rep.takenDefinitionEntityId, rep.sequenceNr, rep.definition))
     }
 
-    def definitionByOwnerId(ownerId: String): Future[Seq[(Long, Long, Definition)]] =
+    val getLocationByOwnerId = Compiled { (ownerId: Rep[String]) =>
+      self.filter(_.ownerId === ownerId).map(rep => (rep.takenDefinitionEntityId, rep.sequenceNr))
+    }
+
+    def locationByOwnerId(ownerId: String): Future[scala.collection.immutable.Seq[(Long, Long)]] =
+      db.run(getLocationByOwnerId(ownerId).result)
+
+    def definitionByOwnerId(ownerId: String): Future[scala.collection.immutable.Seq[(Long, Long, Definition)]] =
       db.run(getDefinitionOwnerId(ownerId).result)
 
     def acquire(row: DefinitionOwnershipRow): Future[Done] =

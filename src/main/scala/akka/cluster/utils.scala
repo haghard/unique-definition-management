@@ -12,8 +12,6 @@ import akka.stream.scaladsl.{Flow, Keep, Sink}
 import akka.stream.typed.scaladsl.ActorSource
 import com.definition.TakenDefinition
 
-import scala.util.control.NonFatal
-
 object utils {
 
   def newLeastShardAllocationStrategy() = {
@@ -78,7 +76,7 @@ object utils {
           case ex: akka.stream.WatchedActorTerminatedException =>
             sys.log.error("Replicator failed. Terminate stream", ex)
             Supervision.Stop
-          case NonFatal(ex) =>
+          case ex: Throwable =>
             sys.log.error("Unexpected error!", ex)
             Supervision.Stop
         }

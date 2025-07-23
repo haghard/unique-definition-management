@@ -11,7 +11,7 @@ import akka.persistence.typed.scaladsl.*
 
 import scala.concurrent.duration.DurationInt
 import com.definition.domain.*
-import com.definition.api.*
+import com.definition.service.*
 import Implicits.*
 import com.definition.domain.Cmd as PbCmd
 import com.definition.domain.Event as PbEvent
@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets
 
 object TakenDefinition {
 
-  val TypeKey: EntityTypeKey[PbCmd] = EntityTypeKey[PbCmd](name = "tkn-dfn")
+  val TypeKey: EntityTypeKey[PbCmd] = EntityTypeKey[PbCmd](name = "taken-dfn")
 
   object Extractor {
     def apply(numberOfShards: Int): ShardingMessageExtractor[PbCmd, PbCmd] =
@@ -29,7 +29,6 @@ object TakenDefinition {
         override def entityId(cmd: PbCmd): String =
           cmd match {
             case Create(_, definition, _) =>
-              // math.abs(definition.contentKey.hashCode).toString
               val bts = ByteBuffer.wrap(definition.contentKey.getBytes(StandardCharsets.UTF_8))
               CassandraMurmurHash.hash2_64(bts, 0, bts.array.length, akka.util.HashCode.SEED).toString
             case Update(_, definition, _, _) =>
@@ -123,6 +122,7 @@ object TakenDefinition {
                   )
                 }
           }
+
         case Update(ownerId, definition, prevDefinitionLocation, replyTo) =>
           ctx.log.info(s"★★★> Update ${definition.name}  OwnerId:$ownerId")
           pbState.contentKeySeqNum.get(definition.contentKey) match {
@@ -158,13 +158,13 @@ object TakenDefinition {
                 }
           }
 
-        case Release(ownerId, prevDefinitionLocation, replyTo) =>
+        case Release(ownerId, definitionLocation, replyTo) =>
           pbState.contentKeySeqNum.collectFirst {
-            case (_, seqNum) if seqNum == prevDefinitionLocation.seqNum => seqNum
+            case (_, seqNum) if seqNum == definitionLocation.seqNum => seqNum
           } match {
             case Some(seqNum) =>
               Effect
-                .persist(Released(ownerId, prevDefinitionLocation))
+                .persist(Released(ownerId, definitionLocation))
                 .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
                   ctx.log.warn(s"Released old_definition for $ownerId:$seqNum")
                   StatusReply.success(Done)

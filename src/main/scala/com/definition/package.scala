@@ -2,11 +2,13 @@ package com.definition
 
 object Implicits {
 
-  implicit class Ops(val self: com.definition.domain.Definition) extends AnyVal {
+  implicit class Ops(val definition: com.definition.domain.Definition) extends AnyVal {
 
     def contentKey: String =
-      self.name + self.address + self.city + self.country + self.state.getOrElse("n") + self.zipCode.getOrElse(
+      definition.name + definition.address + definition.city + definition.country + definition.state.getOrElse(
         "n"
-      ) + self.brand.getOrElse("n")
+      ) + definition.zipCode.getOrElse(
+        "n"
+      ) + definition.brand.getOrElse("n")
   }
 }

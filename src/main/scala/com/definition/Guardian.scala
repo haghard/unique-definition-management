@@ -26,10 +26,10 @@ object Guardian {
 
   sealed trait Protocol
   object Protocol {
-    final case class SelfUpMsg(mba: immutable.SortedSet[Member]) extends Protocol
+    final case class SelfUpMsg(members: immutable.SortedSet[Member]) extends Protocol
   }
 
-  val numberOfTags = 4
+  val numberOfTags = 2
   val tags         = Vector.tabulate(numberOfTags)(_.toString)
   val name         = "events"
 
@@ -56,7 +56,7 @@ object Guardian {
     SlickProjection
       .atLeastOnceAsync(
         ProjectionId(name, tag),
-        // EventSourcedProvider.eventsBySlices()
+        // TODO: try this EventSourcedProvider.eventsBySlices()
         EventSourcedProvider.eventsByTag[PbEvent](system, JdbcReadJournal.Identifier, tag),
         dbConfig,
         () =>
@@ -103,12 +103,12 @@ object Guardian {
       .withSaveOffset(afterEnvelopes = 10, afterDuration = 500.millis)
   }
 
-  def initProjections(region: ActorRef[com.definition.domain.Release])(implicit system: ActorSystem[_]): Unit = {
+  def initProjections(shardRegion: ActorRef[com.definition.domain.Release])(implicit system: ActorSystem[_]): Unit = {
     val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
     ShardedDaemonProcess(system).init(
       name,
       numberOfTags,
-      tag => ProjectionBehavior(mkProjection(tags(tag), dbConfig, name, region)),
+      tag => ProjectionBehavior(mkProjection(tags(tag), dbConfig, name, shardRegion)),
       ShardedDaemonProcessSettings(system),
       Some(ProjectionBehavior.Stop)
     )
@@ -141,7 +141,7 @@ object Guardian {
             val shardingSettings = ClusterShardingSettings(system)
             val clusterSharding  = ClusterSharding(system)
 
-            val region: ActorRef[com.definition.domain.Cmd] =
+            val shardRegion: ActorRef[com.definition.domain.Cmd] =
               clusterSharding
                 .init(
                   Entity(TakenDefinition.TypeKey)(TakenDefinition(_, snapshotEveryN = 10))
@@ -162,9 +162,9 @@ object Guardian {
 
             Tables.createAllTables()
 
-            initProjections(region.narrow[com.definition.domain.Release])
+            initProjections(shardRegion.narrow[com.definition.domain.Release])
 
-            Bootstrap(region, selfAddress.host.get, grpcPort)(ctx.system)
+            Bootstrap(shardRegion, selfAddress.host.get, grpcPort)(ctx.system)
             Behaviors.same
           }
       }
