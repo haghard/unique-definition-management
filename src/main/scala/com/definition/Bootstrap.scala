@@ -75,16 +75,23 @@ final case class Bootstrap(
         }
 
         // forcefully kills connections that are still open
-        shutdown.addTask(PhaseServiceStop, "close.connections") { () =>
+        shutdown.addTask(PhaseServiceStop, "close.http.connections") { () =>
           Http().shutdownAllConnectionPools().map { _ =>
-            system.log.info("★ ★ ★ CoordinatedShutdown [close.connections] ★ ★ ★")
+            system.log.info("★ ★ ★ CoordinatedShutdown [close.http.connections] ★ ★ ★")
             Done
+          }
+        }
+
+        shutdown.addTask(CoordinatedShutdown.PhaseBeforeActorSystemTerminate, "close.db") { () =>
+          Tables.shutdown().map {
+            system.log.info("★ ★ ★ CoordinatedShutdown [close.db] ★ ★ ★")
+            _ => Done
           }
         }
 
         shutdown.addTask(PhaseActorSystemTerminate, "system.term") { () =>
           Future.successful {
-            system.log.info("★ ★ ★ CoordinatedShutdown [close.connections] ★ ★ ★")
+            system.log.info("★ ★ ★ CoordinatedShutdown [close.system] ★ ★ ★")
             Done
           }
         }

@@ -7,7 +7,7 @@ import akka.actor.typed.scaladsl.adapter.TypedActorRefOps
 import akka.cluster.ddata.{LWWRegister, LWWRegisterKey, Replicator}
 import akka.cluster.sharding.ShardCoordinator
 import akka.cluster.sharding.ShardCoordinator.ShardAllocationStrategy
-import akka.stream.{ActorAttributes, CompletionStrategy, KillSwitch, KillSwitches, OverflowStrategy, Supervision}
+import akka.stream.*
 import akka.stream.scaladsl.{Flow, Keep, Sink}
 import akka.stream.typed.scaladsl.ActorSource
 import com.definition.TakenDefinition

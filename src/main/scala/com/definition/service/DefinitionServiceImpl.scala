@@ -3,9 +3,9 @@ package com.definition.service
 import akka.actor.typed.*
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import com.definition.Tables
-import com.definition.service.*
 import com.definition.domain.{Cmd as PbCmd, *}
 
+import java.util.UUID
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 
@@ -15,14 +15,13 @@ final class DefinitionServiceImpl(
     extends DefinitionService {
 
   implicit val sch: Scheduler                = system.scheduler
-  implicit val askTimeout: akka.util.Timeout = akka.util.Timeout(3.seconds)
+  implicit val askTimeout: akka.util.Timeout = akka.util.Timeout(4.seconds)
 
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
-  // "Create" should be called only once by a given ownerId
   override def create(in: CreateRequest): Future[DefinitionReply] =
     Tables.ownership
-      .definitionByOwnerId(in.ownerId)
+      .definitionByOwnerId(UUID.fromString(in.ownerId))
       .flatMap { rows =>
         rows.size match {
           case 0 =>
@@ -56,7 +55,7 @@ final class DefinitionServiceImpl(
               Future.successful(
                 DefinitionReply(
                   in.ownerId,
-                  DefinitionReply.StatusCode.IllegalCreate_UseThisLocation,
+                  DefinitionReply.StatusCode.IllegalCreate_WrongDefinition,
                   DefinitionLocation(entityId, seqNum)
                 )
               )
@@ -65,7 +64,7 @@ final class DefinitionServiceImpl(
             Future.successful(
               DefinitionReply(
                 in.ownerId,
-                DefinitionReply.StatusCode.IllegalCreateTryLater,
+                DefinitionReply.StatusCode.IllegalCreate_IllegalState,
                 DefinitionLocation()
               )
             )
@@ -74,7 +73,7 @@ final class DefinitionServiceImpl(
 
   override def update(in: UpdateDefinitionRequest): Future[DefinitionReply] =
     Tables.ownership
-      .locationByOwnerId(in.ownerId)
+      .locationByOwnerId(UUID.fromString(in.ownerId))
       .flatMap { rows =>
         rows.size match {
           case 0 =>
@@ -82,7 +81,7 @@ final class DefinitionServiceImpl(
             Future.successful(
               DefinitionReply(
                 in.ownerId,
-                DefinitionReply.StatusCode.NotFound,
+                DefinitionReply.StatusCode.OwnerNotFound,
                 DefinitionLocation()
               )
             )

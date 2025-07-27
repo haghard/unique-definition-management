@@ -4,7 +4,7 @@ import akka.actor.RootActorPath
 import akka.actor.typed.scaladsl.AskPattern.*
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter.TypedActorSystemOps
-import akka.actor.typed.{ActorRef, ActorRefResolver, ActorSystem, Behavior}
+import akka.actor.typed.{ActorRef, ActorRefResolver, ActorSystem, Behavior, RecipientRef}
 import akka.cluster.ddata.SelfUniqueAddress
 import akka.cluster.sharding.typed.{ClusterShardingSettings, ShardedDaemonProcessSettings}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, ShardedDaemonProcess}
@@ -21,6 +21,8 @@ import scala.collection.immutable
 import scala.concurrent.duration.DurationInt
 import com.definition.domain.*
 import com.definition.domain.Event as PbEvent
+
+import java.util.UUID
 
 object Guardian {
 
@@ -73,7 +75,7 @@ object Guardian {
                     state = cmd.definition.state,
                     zipCode = cmd.definition.zipCode,
                     brand = cmd.definition.brand,*/
-                    ownerId = cmd.ownerId,
+                    ownerId = UUID.fromString(cmd.ownerId),
                     entityId = env.persistenceId.toLong,
                     sequenceNr = cmd.seqNum,
                     // sequenceNr = env.sequenceNr,
@@ -83,10 +85,6 @@ object Guardian {
                 Tables.ownership.acquire(row)
 
               case cmd: Released =>
-                /*Tables.ownership.releaseF(
-                  cmd.prevDefinitionLocation.entityId,
-                  cmd.prevDefinitionLocation.seqNum
-                )*/
                 Tables.ownership.release(
                   cmd.prevDefinitionLocation.entityId,
                   cmd.prevDefinitionLocation.seqNum
@@ -94,6 +92,8 @@ object Guardian {
 
               case ReleaseRequested(ownerId, prevDefinitionLocation) =>
                 // Future.failed(new Exception(s"Boom !!!"))
+                // val r: String => RecipientRef[com.definition.domain.Release] = ???
+                // r(ownerId).askWithStatus()
                 region.askWithStatus(replyTo =>
                   com.definition.domain
                     .Release(ownerId, prevDefinitionLocation, resolver.toSerializationFormat(replyTo))
@@ -122,7 +122,7 @@ object Guardian {
         implicit val selfUniqueAddress = SelfUniqueAddress(cluster.selfMember.uniqueAddress)
 
         val selfAddress = selfUniqueAddress.uniqueAddress.address
-        ctx.log.warn("★ ★ ★  Step 0. SelfUp: {}  ★ ★ ★", selfUniqueAddress)
+        ctx.log.warn("★ ★ ★  SelfUp: {}  ★ ★ ★", selfUniqueAddress)
 
         cluster.subscriptions.tell(
           akka.cluster.typed.Subscribe(
@@ -163,7 +163,6 @@ object Guardian {
             Tables.createAllTables()
 
             initProjections(shardRegion.narrow[com.definition.domain.Release])
-
             Bootstrap(shardRegion, selfAddress.host.get, grpcPort)(ctx.system)
             Behaviors.same
           }

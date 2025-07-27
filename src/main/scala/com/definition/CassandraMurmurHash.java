@@ -2,6 +2,7 @@ package com.definition;
 
 import java.nio.ByteBuffer;
 
+//https://github.com/scylladb/scylla-tools-java/blob/0b4accdd5ecb69a6346151987ba974e6be02b123/src/java/org/apache/cassandra/utils/MurmurHash.java
 public class CassandraMurmurHash {
 
   public static long hash2_64(ByteBuffer key, int offset, int length, long seed) {

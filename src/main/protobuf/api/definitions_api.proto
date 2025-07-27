@@ -48,10 +48,10 @@ message DefinitionReply {
     Undefined = 0;
     OK = 1;
     Reserved = 2;
-    NotFound = 3;
+    OwnerNotFound = 3;
     IllegalStateTryLater = 4;
-    IllegalCreate_UseThisLocation = 5;
-    IllegalCreateTryLater = 6;
+    IllegalCreate_WrongDefinition = 5;
+    IllegalCreate_IllegalState = 6;
     StaleUpdate_UseThisLocation = 7;
   }
 }
