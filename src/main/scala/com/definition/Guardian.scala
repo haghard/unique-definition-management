@@ -22,6 +22,8 @@ import scala.concurrent.duration.DurationInt
 import com.definition.domain.*
 import com.definition.domain.Event as PbEvent
 
+import java.util.UUID
+
 object Guardian {
 
   sealed trait Protocol
@@ -66,13 +68,8 @@ object Guardian {
                 val row =
                   DefinitionOwnershipRow(
                     name = cmd.definition.name,
-                    address = cmd.definition.address,
-                    city = cmd.definition.city,
-                    country = cmd.definition.country,
-                    state = cmd.definition.state,
-                    zipCode = cmd.definition.zipCode,
-                    brand = cmd.definition.brand,
-                    ownerId = cmd.ownerId,
+                    definition = cmd.definition,
+                    ownerId = UUID.fromString(cmd.ownerId),
                     entityId = env.persistenceId.toLong,
                     sequenceNr = cmd.seqNum,
                     // sequenceNr = env.sequenceNr,

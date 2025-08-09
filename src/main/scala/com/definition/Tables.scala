@@ -3,21 +3,20 @@ package com.definition
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.projection.slick.SlickProjection
+import com.definition.domain.Definition
+import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 import slick.basic.DatabaseConfig
-import slick.jdbc.MySQLProfile
+import slick.jdbc.{GetResult, MySQLProfile}
 
+import java.util.UUID
 import scala.concurrent.*
+import scala.reflect.ClassTag
 import scala.util.Using
 
 final case class DefinitionOwnershipRow(
   name: String,
-  address: String,
-  city: String,
-  country: String,
-  state: Option[String],
-  zipCode: Option[String],
-  brand: Option[String],
-  ownerId: String,
+  definition: Definition,
+  ownerId: UUID,
   entityId: Long,
   sequenceNr: Long,
   when: Long
@@ -27,23 +26,23 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
 
   import profile.api._
 
+  implicit val GetResultUuid: GetResult[UUID] = slick.jdbc.GetResult { rs =>
+    val bts = java.nio.ByteBuffer.wrap(rs.nextBytes())
+    new java.util.UUID(bts.getLong(), bts.getLong())
+  }
+
+  implicit def pbMapper[T <: GeneratedMessage: ClassTag](implicit
+    companion: GeneratedMessageCompanion[T]
+  ): BaseColumnType[T] =
+    MappedColumnType.base((pb: T) => pb.toByteArray, (bts: Array[Byte]) => companion.parseFrom(bts))
+
   class Ownership(tag: Tag) extends Table[DefinitionOwnershipRow](tag, "OWNERSHIP") {
 
     def name: Rep[String] = column[String]("NAME", O.Length(255))
 
-    def address: Rep[String] = column[String]("ADDRESS", O.Length(255))
+    def definition: Rep[Definition] = column[Definition]("DEFINITION")
 
-    def city: Rep[String] = column[String]("CITY", O.Length(255))
-
-    def country: Rep[String] = column[String]("COUNTRY", O.Length(255))
-
-    def state: Rep[Option[String]] = column[Option[String]]("STATE", O.Length(255))
-
-    def zipCode: Rep[Option[String]] = column[Option[String]]("ZIP_CODE", O.Length(255))
-
-    def brand: Rep[Option[String]] = column[Option[String]]("BRAND", O.Length(255))
-
-    def ownerId: Rep[String] = column[String]("OWNER_ID", O.Length(36))
+    def ownerId: Rep[UUID] = column[UUID]("OWNER_ID")
 
     def entityId: Rep[Long] = column[Long]("ENTITY_ID")
 
@@ -56,19 +55,19 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     def ownerIdIndex: slick.lifted.Index = index("OWNERSHIP__OWNER_ID_IND", ownerId)
 
     def * : slick.lifted.ProvenShape[DefinitionOwnershipRow] =
-      (name, address, city, country, state, zipCode, brand, ownerId, entityId, sequenceNr, when) <>
+      (name, definition, ownerId, entityId, sequenceNr, when) <>
         ((DefinitionOwnershipRow.apply _).tupled, DefinitionOwnershipRow.unapply)
   }
 
   object ownership extends TableQuery(new Ownership(_)) {
     self =>
 
-    val getLocationByOwnerId = Compiled { (ownerId: Rep[String]) =>
+    val locationByOwnerId = Compiled { (ownerId: Rep[UUID]) =>
       self.filter(_.ownerId === ownerId).map(rep => (rep.entityId, rep.sequenceNr))
     }
 
-    def locationByOwnerId(ownerId: String): Future[scala.collection.immutable.Seq[(Long, Long)]] =
-      db.run(getLocationByOwnerId(ownerId).result)
+    def getLocationByOwnerId(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long)]] =
+      db.run(locationByOwnerId(ownerId).result)
 
     def acquire(row: DefinitionOwnershipRow): Future[Done] =
       db.run(ownership.insertOrUpdate(row)).map(_ => Done)(ExecutionContext.parasitic)
