@@ -29,7 +29,6 @@ object TakenDefinition {
         override def entityId(cmd: PbCmd): String =
           cmd match {
             case Create(_, definition, _) =>
-              // math.abs(definition.contentKey.hashCode).toString
               val bts = ByteBuffer.wrap(definition.contentKey.getBytes(StandardCharsets.UTF_8))
               CassandraMurmurHash.hash2_64(bts, 0, bts.array.length, akka.util.HashCode.SEED).toString
             case Update(_, definition, _, _) =>

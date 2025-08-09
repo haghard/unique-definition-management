@@ -140,26 +140,7 @@ object Guardian {
             val shardingSettings = ClusterShardingSettings(system)
             val clusterSharding  = ClusterSharding(system)
 
-            /*val region: ActorRef[com.definition.domain.Cmd] =
-              clusterSharding
-                .init(
-                  Entity(TakenDefinitionBucket.TypeKey)(TakenDefinitionBucket(_))
-                    .withMessageExtractor(TakenDefinitionBucket.Extractor(commonSettings.numberOfShards))
-                    .withStopMessage(com.definition.domain.Passivate())
-                    .withAllocationStrategy(
-                      utils.newLeastShardAllocationStrategy()
-                      // akka.cluster.sharding.ShardCoordinator.ShardAllocationStrategy.leastShardAllocationStrategy(TakenDefinitionBucket.NumOfShards / 2, 0.2)
-                    )
-                    .withSettings(
-                      ClusterShardingSettings(system)
-                        .withPassivationStrategy(
-                          akka.cluster.sharding.typed.ClusterShardingSettings.PassivationStrategySettings.defaults
-                            .withIdleEntityPassivation(60.seconds)
-                        )
-                    )
-                )*/
-
-            val region: ActorRef[com.definition.domain.Cmd] =
+            val takenDefinition: ActorRef[com.definition.domain.Cmd] =
               clusterSharding
                 .init(
                   Entity(TakenDefinition.TypeKey)(TakenDefinition(_, snapshotEveryNEvents = 10))
@@ -180,9 +161,9 @@ object Guardian {
 
             Tables.createAllTables()
 
-            initProjections(region.narrow[com.definition.domain.Release])
+            initProjections(takenDefinition.narrow[com.definition.domain.Release])
 
-            Bootstrap(region, selfAddress.host.get, grpcPort)(ctx.system)
+            Bootstrap(takenDefinition, selfAddress.host.get, grpcPort)(ctx.system)
             Behaviors.same
           }
       }

@@ -67,7 +67,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
       self.filter(_.ownerId === ownerId).map(rep => (rep.entityId, rep.sequenceNr))
     }
 
-    def locationByOwnerId(ownerId: String): Future[Seq[(Long, Long)]] =
+    def locationByOwnerId(ownerId: String): Future[scala.collection.immutable.Seq[(Long, Long)]] =
       db.run(getLocationByOwnerId(ownerId).result)
 
     def acquire(row: DefinitionOwnershipRow): Future[Done] =
