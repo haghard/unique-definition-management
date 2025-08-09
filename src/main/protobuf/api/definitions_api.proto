@@ -17,26 +17,17 @@ option (scalapb.options) = {
   no_primitive_wrappers: true,
   no_default_values_in_constructor: true,
   single_file: true,
-  preamble: "sealed trait DefinitionRequest extends scalapb.GeneratedMessage",
 };
 
 service DefinitionService {
-  rpc Create(CreateRequest) returns (DefinitionReply) {}
-  rpc Update(UpdateDefinitionRequest) returns (DefinitionReply) {}
+  rpc ConditionalPut(PutRequest) returns (DefinitionReply) {}
 }
 
-message CreateRequest {
-  option (scalapb.message).extends = "DefinitionRequest";
+message PutRequest {
   string owner_id = 1;
   com.definition.domain.Definition definition = 2 [(scalapb.field).no_box = true];
+  int64 seq_num = 3;
 }
-
-message UpdateDefinitionRequest {
-  option (scalapb.message).extends = "DefinitionRequest";
-  string owner_id = 1;
-  com.definition.domain.Definition definition = 2 [(scalapb.field).no_box = true];
-}
-
 
 message DefinitionReply {
   string owner_id = 1;
@@ -46,8 +37,9 @@ message DefinitionReply {
   enum StatusCode {
     Undefined = 0;
     OK = 1;
-    Reserved = 2;
-    NotFound = 3;
-    IllegalState = 4;
+    OK2 = 2;
+    Reserved = 3;
+    NotFound = 4;
+    IllegalState = 5;
   }
 }

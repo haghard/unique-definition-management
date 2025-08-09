@@ -64,14 +64,14 @@ object Guardian {
         () =>
           (env: akka.projection.eventsourced.EventEnvelope[PbEvent]) =>
             env.event match {
-              case cmd: Acquired =>
+              case acquired: Acquired =>
                 val row =
                   DefinitionOwnershipRow(
-                    name = cmd.definition.name,
-                    definition = cmd.definition,
-                    ownerId = UUID.fromString(cmd.ownerId),
+                    name = acquired.definition.name,
+                    definition = acquired.definition,
+                    ownerId = UUID.fromString(acquired.ownerId),
                     entityId = env.persistenceId.toLong,
-                    sequenceNr = cmd.seqNum,
+                    sequenceNr = acquired.seqNum,
                     // sequenceNr = env.sequenceNr,
                     when = env.timestamp
                   )

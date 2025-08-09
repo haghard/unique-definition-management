@@ -48,6 +48,8 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
 
     def sequenceNr: Rep[Long] = column[Long]("SEQ_NUM")
 
+    // def cToken: Rep[Long] = column[Long]("C_TOKEN")
+
     def when: Rep[Long] = column[Long]("WHEN")
 
     def pk: slick.lifted.PrimaryKey = primaryKey("OWNERSHIP__PK", (entityId, sequenceNr))
@@ -63,10 +65,10 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     self =>
 
     val locationByOwnerId = Compiled { (ownerId: Rep[UUID]) =>
-      self.filter(_.ownerId === ownerId).map(rep => (rep.entityId, rep.sequenceNr))
+      self.filter(_.ownerId === ownerId).map(rep => (rep.entityId, rep.sequenceNr, rep.definition))
     }
 
-    def getLocationByOwnerId(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long)]] =
+    def getLocationByOwnerId(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long, Definition)]] =
       db.run(locationByOwnerId(ownerId).result)
 
     def acquire(row: DefinitionOwnershipRow): Future[Done] =

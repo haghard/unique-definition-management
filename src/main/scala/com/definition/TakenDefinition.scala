@@ -102,7 +102,7 @@ object TakenDefinition {
                   StatusReply.success(
                     DefinitionReply(
                       ownerId,
-                      DefinitionReply.StatusCode.OK,
+                      DefinitionReply.StatusCode.OK2,
                       DefinitionLocation(entityId, seqNum)
                     )
                   )
