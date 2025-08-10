@@ -1,4 +1,4 @@
-# Distributed sharded index that support ConditionPut operation
+# Distributed sharded index that support ConditionPut: acquire only if the object doesn’t belong to other owner_id
 
 ## Requirements
 
@@ -9,7 +9,7 @@
 
 I rely on eventual consistency to guarantee low latency for all operations.
 We can reply without having to wait for each update being applied on the read side. Moreover, attempt we ensure a total order of operation by `owner_id`.
-Why it is possible ? Because it doesn't violate our app level invariant: Each unique definition belongs to exactly one owner_id at any point in time.
+Why it is possible ? Because it doesn't violate our app level invariant: Each unique definition belongs to exactly one `owner_id` at any point in time.
 
 ### Write path
  1) One database RTT to lookup data by `owner_id` as an attempt to ensure a total order of updates by `owner_id` 
@@ -19,7 +19,6 @@ Why it is possible ? Because it doesn't violate our app level invariant: Each un
 ### Ensure correctness: Conflict detection and resolution strategy
 
 We do not prevent concurrent writes by the same `owner_id`, although it should not happen under normal circumstances. But we detect them and rollback the conflicting change.
-
 
 
 
