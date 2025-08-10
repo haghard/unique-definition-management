@@ -73,26 +73,23 @@ object Guardian {
                     entityId = env.persistenceId.toLong,
                     sequenceNr = acquired.seqNum,
                     // sequenceNr = env.sequenceNr,
+                    causalToken = acquired.causalToken,
                     when = env.timestamp
                   )
-
-                Tables.ownership.acquire(row)
-
-              case cmd: Released =>
-                /*Tables.ownership.releaseF(
-                  cmd.prevDefinitionLocation.entityId,
-                  cmd.prevDefinitionLocation.seqNum
-                )*/
-                Tables.ownership.release(
-                  cmd.prevDefinitionLocation.entityId,
-                  cmd.prevDefinitionLocation.seqNum
-                )
+                // TODO: LWW Allow concurrency and
+                Tables.definitionIndexView.acquire(row)
 
               case ReleaseRequested(ownerId, prevDefinitionLocation) =>
                 // Future.failed(new Exception(s"Boom !!!"))
                 region.askWithStatus(replyTo =>
                   com.definition.domain
                     .Release(ownerId, prevDefinitionLocation, resolver.toSerializationFormat(replyTo))
+                )
+
+              case cmd: Released =>
+                Tables.definitionIndexView.release(
+                  cmd.prevDefinitionLocation.entityId,
+                  cmd.prevDefinitionLocation.seqNum
                 )
             }
       )

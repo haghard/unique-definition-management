@@ -16,103 +16,151 @@ final class DefinitionServiceImpl(
 )(implicit system: ActorSystem[_])
     extends DefinitionService {
 
-  implicit val sch: Scheduler                = system.scheduler
-  implicit val askTimeout: akka.util.Timeout = akka.util.Timeout(3.seconds)
-
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
-  override def conditionalPut(in: PutRequest): Future[DefinitionReply] =
-    in.seqNum match {
+  implicit val sch: Scheduler                                = system.scheduler
+  implicit val askTimeout: akka.util.Timeout                 = akka.util.Timeout(3.seconds)
+  implicit val ec: scala.concurrent.ExecutionContextExecutor = system.executionContext
+
+  override def conditionalPut(in: PutRequest): Future[PutReply] =
+    in.causalToken match {
       case 0 =>
-        shardRegion
-          .askWithStatus[DefinitionReply] { askReplyTo =>
-            Create(
+        create(in)
+
+      case causalToken =>
+        if (causalToken > 0)
+          update(in)
+        else
+          Future.successful(
+            PutReply(
               in.ownerId,
-              Definition(
-                in.definition.name,
-                in.definition.address,
-                in.definition.city,
-                in.definition.country,
-                in.definition.state,
-                in.definition.zipCode,
-                in.definition.brand
-              ),
-              actorRefResolver.toSerializationFormat(askReplyTo)
+              PutReply.StatusCode.InvalidCausalToken,
+              -1
             )
-          }
+          )
+    }
 
-      case n if n > 0 =>
-        Tables.ownership
-          .getLocationByOwnerId(UUID.fromString(in.ownerId))
-          .flatMap { rows =>
-            rows.size match {
-              case 0 =>
-                Future.successful(
-                  DefinitionReply(
-                    in.ownerId,
-                    com.definition.api.DefinitionReply.StatusCode.NotFound,
-                    DefinitionLocation(-1, -1)
-                  )
+  override def getCausalToken(in: GetCausalTokenRequest): Future[GetCausalTokenReply] =
+    Tables.definitionIndexView
+      .getCausalToken(UUID.fromString(in.ownerId))
+      .map(tokenOpt => GetCausalTokenReply(tokenOpt.getOrElse(0)))
+
+  def create(in: PutRequest) =
+    Tables.definitionIndexView
+      .getLocationByOwnerId(UUID.fromString(in.ownerId))
+      .flatMap { rows =>
+        rows.size match {
+          case 0 =>
+            // Unprotected concurrent access is allowed
+            shardRegion
+              .askWithStatus[PutReply] { askReplyTo =>
+                Create(
+                  in.ownerId,
+                  Definition(
+                    in.definition.name,
+                    in.definition.address,
+                    in.definition.city,
+                    in.definition.country,
+                    in.definition.state,
+                    in.definition.zipCode,
+                    in.definition.brand
+                  ),
+                  actorRefResolver.toSerializationFormat(askReplyTo)
                 )
-              case 1 =>
-                val (entityId, seqNum, definition) = rows.head
+              }
+          case 1 =>
+            val (_, _, definition, causalToken) = rows.head
+            if (definition == in.definition) {
+              Future.successful(
+                PutReply(
+                  in.ownerId,
+                  PutReply.StatusCode.OK2,
+                  causalToken
+                )
+              )
+            } else {
+              Future.successful(
+                PutReply(
+                  in.ownerId,
+                  PutReply.StatusCode.AnotherDefinitionFound,
+                  causalToken
+                )
+              )
+            }
+          case _ =>
+            Future.successful(
+              PutReply(
+                in.ownerId,
+                PutReply.StatusCode.IllegalState,
+                -1
+              )
+            )
+        }
+      }
 
-                if (in.definition != definition) {
-                  if (seqNum == in.seqNum) {
-                    shardRegion
-                      .askWithStatus[DefinitionReply] { replyTo =>
-                        Update(
-                          in.ownerId,
-                          Definition(
-                            in.definition.name,
-                            in.definition.address,
-                            in.definition.city,
-                            in.definition.country,
-                            in.definition.state,
-                            in.definition.zipCode,
-                            in.definition.brand
-                          ),
-                          DefinitionLocation(entityId, seqNum),
-                          actorRefResolver.toSerializationFormat(replyTo)
-                        )
-                      }
-                  } else {
-                    Future.successful(
-                      DefinitionReply(
-                        in.ownerId,
-                        com.definition.api.DefinitionReply.StatusCode.NotFound,
-                        DefinitionLocation(entityId, seqNum)
-                      )
+  def update(in: PutRequest) =
+    Tables.definitionIndexView
+      .getLocationByOwnerId(UUID.fromString(in.ownerId))
+      .flatMap { rows =>
+        rows.size match {
+          case 0 =>
+            Future.successful(
+              PutReply(
+                in.ownerId,
+                PutReply.StatusCode.NotFound,
+                -1
+              )
+            )
+          case 1 =>
+            // Unprotected concurrent access is allowed
+            val (entityId, seqNum, definition, causalToken) = rows.head
+            if (in.definition != definition) {
+              if (causalToken == in.causalToken) {
+                shardRegion
+                  .askWithStatus[PutReply] { replyTo =>
+                    Update(
+                      in.ownerId,
+                      Definition(
+                        in.definition.name,
+                        in.definition.address,
+                        in.definition.city,
+                        in.definition.country,
+                        in.definition.state,
+                        in.definition.zipCode,
+                        in.definition.brand
+                      ),
+                      DefinitionLocation(entityId, seqNum),
+                      actorRefResolver.toSerializationFormat(replyTo)
                     )
                   }
-                } else {
-                  Future.successful(
-                    DefinitionReply(
-                      in.ownerId,
-                      com.definition.api.DefinitionReply.StatusCode.OK2,
-                      DefinitionLocation(entityId, seqNum)
-                    )
-                  )
-                }
-
-              case n =>
+              } else {
                 Future.successful(
-                  DefinitionReply(
+                  PutReply(
                     in.ownerId,
-                    com.definition.api.DefinitionReply.StatusCode.IllegalState,
-                    DefinitionLocation(-1, -1)
+                    PutReply.StatusCode.CausalTokenNotFound,
+                    causalToken
                   )
                 )
+              }
+            } else {
+              Future.successful(
+                PutReply(
+                  in.ownerId,
+                  PutReply.StatusCode.OK2,
+                  causalToken
+                )
+              )
             }
-          }(system.executionContext)
 
-      case n =>
-        Future.successful(
-          DefinitionReply(
-            in.ownerId,
-            com.definition.api.DefinitionReply.StatusCode.IllegalState,
-            DefinitionLocation(-1, n)
-          )
-        )
-    }
+          case n =>
+            // fix on read ???
+            Future.successful(
+              PutReply(
+                in.ownerId,
+                PutReply.StatusCode.IllegalState,
+                -1
+              )
+            )
+        }
+      }
 }

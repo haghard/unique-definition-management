@@ -19,6 +19,7 @@ final case class DefinitionOwnershipRow(
   ownerId: UUID,
   entityId: Long,
   sequenceNr: Long,
+  causalToken: Long,
   when: Long
 )
 
@@ -36,7 +37,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
   ): BaseColumnType[T] =
     MappedColumnType.base((pb: T) => pb.toByteArray, (bts: Array[Byte]) => companion.parseFrom(bts))
 
-  class Ownership(tag: Tag) extends Table[DefinitionOwnershipRow](tag, "OWNERSHIP") {
+  class DefinitionIndexView(tag: Tag) extends Table[DefinitionOwnershipRow](tag, "definition_index_view") {
 
     def name: Rep[String] = column[String]("NAME", O.Length(255))
 
@@ -48,7 +49,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
 
     def sequenceNr: Rep[Long] = column[Long]("SEQ_NUM")
 
-    // def cToken: Rep[Long] = column[Long]("C_TOKEN")
+    def causalToken: Rep[Long] = column[Long]("CAUSAL_TOKEN")
 
     def when: Rep[Long] = column[Long]("WHEN")
 
@@ -57,33 +58,40 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     def ownerIdIndex: slick.lifted.Index = index("OWNERSHIP__OWNER_ID_IND", ownerId)
 
     def * : slick.lifted.ProvenShape[DefinitionOwnershipRow] =
-      (name, definition, ownerId, entityId, sequenceNr, when) <>
+      (name, definition, ownerId, entityId, sequenceNr, causalToken, when) <>
         ((DefinitionOwnershipRow.apply _).tupled, DefinitionOwnershipRow.unapply)
   }
 
-  object ownership extends TableQuery(new Ownership(_)) {
+  object definitionIndexView extends TableQuery(new DefinitionIndexView(_)) {
     self =>
 
     val locationByOwnerId = Compiled { (ownerId: Rep[UUID]) =>
-      self.filter(_.ownerId === ownerId).map(rep => (rep.entityId, rep.sequenceNr, rep.definition))
+      self.filter(_.ownerId === ownerId).map(rep => (rep.entityId, rep.sequenceNr, rep.definition, rep.causalToken))
     }
 
-    def getLocationByOwnerId(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long, Definition)]] =
+    val GetCausalToken = Compiled { (ownerId: Rep[UUID]) =>
+      self.filter(_.ownerId === ownerId).map(rep => rep.causalToken)
+    }
+
+    def getLocationByOwnerId(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long, Definition, Long)]] =
       db.run(locationByOwnerId(ownerId).result)
 
+    def getCausalToken(ownerId: UUID): Future[Option[Long]] =
+      db.run(GetCausalToken(ownerId).result.headOption)
+
     def acquire(row: DefinitionOwnershipRow): Future[Done] =
-      db.run(ownership.insertOrUpdate(row)).map(_ => Done)(ExecutionContext.parasitic)
+      db.run(definitionIndexView.insertOrUpdate(row)).map(_ => Done)(ExecutionContext.parasitic)
 
     def releaseFailed(entityId: Long, seqNum: Long): Future[Done] =
       db.run(DBIO.from(Future.failed(new Exception(s"Boom($entityId,$seqNum) !!!"))))
 
     def release(entityId: Long, seqNum: Long): Future[Done] =
       db
-        .run(ownership.filter(rep => rep.entityId === entityId && rep.sequenceNr === seqNum).delete)
+        .run(definitionIndexView.filter(rep => rep.entityId === entityId && rep.sequenceNr === seqNum).delete)
         .map(_ => Done)(ExecutionContext.parasitic)
   }
 
-  val tables           = Seq(ownership)
+  val tables           = Seq(definitionIndexView)
   val ddl: profile.DDL = tables.map(_.schema).reduce(_ ++ _)
 
   private val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")

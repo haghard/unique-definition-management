@@ -89,72 +89,73 @@ object TakenDefinition {
     def applyCmd(
       cmd: PbCmd,
       entityId: Long
-    )(implicit ctx: ActorContext[PbCmd], resolver: ActorRefResolver): ReplyEffect[PbEvent, TakenDefinitionState] =
+    )(implicit ctx: ActorContext[PbCmd], resolver: ActorRefResolver): ReplyEffect[PbEvent, TakenDefinitionState] = {
+      val causalToken = System.nanoTime()
       cmd match {
         case Create(ownerId, definition, replyTo) =>
           ctx.log.info(s"★★★> Create ${definition.name} to $ownerId")
-          pbState.contentKeySeqNum.get(definition.contentKey) match {
-            case Some(seqNum) =>
-              Effect
-                .none[PbEvent, TakenDefinitionState]
-                .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
-                  ctx.log.warn("Already reserved")
-                  StatusReply.success(
-                    DefinitionReply(
-                      ownerId,
-                      DefinitionReply.StatusCode.OK2,
-                      DefinitionLocation(entityId, seqNum)
-                    )
+          if (pbState.contentKeySeqNum.contains(definition.contentKey)) {
+            Effect
+              .none[PbEvent, TakenDefinitionState]
+              .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
+                ctx.log.warn("Already reserved: ConcurrentAccess")
+                StatusReply.success(
+                  PutReply(
+                    ownerId,
+                    PutReply.StatusCode.ConcurrentAccess,
+                    -1 // Can provide real cToken here,
                   )
-                }
-            case None =>
-              val seqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
-              Effect
-                .persist(Acquired(ownerId, definition, seqNum))
-                .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
-                  ctx.log.info(s"OwnerId:$ownerId acquired ${definition.name}")
-                  StatusReply.success(
-                    DefinitionReply(
-                      ownerId,
-                      DefinitionReply.StatusCode.OK,
-                      DefinitionLocation(entityId, seqNum)
-                    )
+                )
+              }
+          } else {
+            val seqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
+            Effect
+              .persist(Acquired(ownerId, definition, seqNum, causalToken))
+              .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
+                ctx.log.info(s"OwnerId:$ownerId acquired ${definition.name}")
+                StatusReply.success(
+                  PutReply(
+                    ownerId,
+                    PutReply.StatusCode.OK,
+                    causalToken
                   )
-                }
+                )
+              }
           }
+
         case Update(ownerId, definition, prevDefinitionLocation, replyTo) =>
           ctx.log.info(s"★★★> Update ${definition.name}  OwnerId:$ownerId")
-          pbState.contentKeySeqNum.get(definition.contentKey) match {
-            case Some(seqNum) =>
-              Effect
-                .none[PbEvent, TakenDefinitionState]
-                .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
-                  ctx.log.warn("Already reserved")
-                  StatusReply.success(
-                    DefinitionReply(
-                      ownerId,
-                      DefinitionReply.StatusCode.Reserved,
-                      DefinitionLocation(entityId, seqNum)
-                    )
-                  )
-                }
 
-            case None =>
-              val seqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
-              Effect
-                .persist(
-                  Acquired(ownerId, definition, seqNum),
-                  ReleaseRequested(ownerId, prevDefinitionLocation)
-                )
-                .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
-                  StatusReply.success(
-                    DefinitionReply(
-                      ownerId,
-                      DefinitionReply.StatusCode.OK,
-                      DefinitionLocation(entityId, seqNum)
-                    )
+          if (pbState.contentKeySeqNum.contains(definition.contentKey)) {
+            Effect
+              .none[PbEvent, TakenDefinitionState]
+              .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
+                ctx.log.warn("Already reserved: ConcurrentAccess")
+                StatusReply.success(
+                  PutReply(
+                    ownerId,
+                    PutReply.StatusCode.ConcurrentAccess,
+                    causalToken
                   )
-                }
+                )
+              }
+          } else {
+            val seqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
+            Effect
+              .persist(
+                // AcquireAndReleased(ownerId, definition, seqNum, causalToken, prevDefinitionLocation)
+                Acquired(ownerId, definition, seqNum, causalToken),
+                ReleaseRequested(ownerId, prevDefinitionLocation)
+              )
+              .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
+                StatusReply.success(
+                  PutReply(
+                    ownerId,
+                    PutReply.StatusCode.OK,
+                    causalToken
+                  )
+                )
+              }
           }
 
         case Release(ownerId, prevDefinitionLocation, replyTo) =>
@@ -185,11 +186,14 @@ object TakenDefinition {
             .thenStop()
             .thenNoReply()
       }
+    }
 
     def applyEvt(event: PbEvent)(implicit ctx: ActorContext[PbCmd]): TakenDefinitionState =
       event match {
-        case Acquired(ownerId, definition, seqNum) =>
-          ctx.log.info("Acquired: {} by {}/{}", definition.name, ownerId, seqNum)
+        case Acquired(ownerId, definition, seqNum, causalToken) =>
+          ctx.log.info("Acquired: {} by {}/{} token: {}", definition.name, ownerId, seqNum, causalToken)
+
+          // TODO: contentKeySeqNum - Use off-heap maps from one-nio
           val updatedIndex = pbState.contentKeySeqNum + (definition.contentKey -> seqNum)
           pbState.update(_.contentKeySeqNum := updatedIndex)
         case Released(ownerId, prevDefinitionLocation) =>

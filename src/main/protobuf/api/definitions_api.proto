@@ -20,19 +20,31 @@ option (scalapb.options) = {
 };
 
 service DefinitionService {
-  rpc ConditionalPut(PutRequest) returns (DefinitionReply) {}
+  rpc ConditionalPut(PutRequest) returns (PutReply) {}
+  rpc GetCausalToken(GetCausalTokenRequest) returns (GetCausalTokenReply) {}
+}
+
+message GetCausalTokenRequest {
+  string owner_id = 1;
+}
+
+message GetCausalTokenReply {
+  int64 causal_token = 3;
 }
 
 message PutRequest {
   string owner_id = 1;
   com.definition.domain.Definition definition = 2 [(scalapb.field).no_box = true];
-  int64 seq_num = 3;
+  int64 causal_token = 3;
 }
 
-message DefinitionReply {
+
+
+message PutReply {
   string owner_id = 1;
   StatusCode status_code = 2;
-  com.definition.domain.DefinitionLocation definition_location = 3 [(scalapb.field).no_box = true];
+  int64 causal_token = 3;
+  //com.definition.domain.DefinitionLocation definition_location = 3 [(scalapb.field).no_box = true];
 
   enum StatusCode {
     Undefined = 0;
@@ -41,5 +53,10 @@ message DefinitionReply {
     Reserved = 3;
     NotFound = 4;
     IllegalState = 5;
+    WrongCausalToken = 6;
+    CausalTokenNotFound=7;
+    AnotherDefinitionFound = 8;
+    InvalidCausalToken=9;
+    ConcurrentAccess=10;
   }
 }
