@@ -2,7 +2,8 @@
 
 ## Requirements
 
-✅ Optimize the write latency. 
+✅ Optimize the write latency.
+
 ✅ Ensure correctness in all scenarios. 
 
 ### Optimize the write latency
@@ -42,15 +43,17 @@ sbt b
 ```
 
 
-`grpcurl -plaintext 127.0.0.1:8080 list`
 
-`http GET 127.0.0.1:8079/definitions/cluster/members`
+### Example method calls
 
+```
+
+grpcurl -plaintext 127.0.0.1:8080 list
+
+http GET 127.0.0.1:8079/definitions/cluster/members
 http GET 127.0.0.2:8079/definitions/cluster/shards
 http GET 127.0.0.2:8079/definitions/cluster/shards/tkn-dfn
 
-
-```
 
 
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
