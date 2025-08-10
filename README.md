@@ -2,24 +2,30 @@
 
 ## Requirements
 
-✅ Optimize the write latency.
+✅ Optimize for low latency.
 
 ✅ Ensure correctness in all scenarios. 
 
 ### Optimize the write latency
 
-I rely on eventual consistency to guarantee low latency for all operations.
-We can reply without having to wait for each update being applied on the read side. Moreover, attempt we ensure a total order of operation by `owner_id`.
-Why it is possible ? Because it doesn't violate our app level invariant: Each unique definition belongs to exactly one `owner_id` at any point in time.
+You usually can't have both low latency and ordering in Distributed Systems. 
+
+Each unique definition belongs to exactly one `owner_id` at any point in time - this is what we want to achieve.
+
+It is a relative order invariant. Acquiring a new definition requires a condition check, and then releasing my current definition which doesn't require ant checks and cannot fail. 
+Causal ordering if enough to guarantee that we never violate it.
+
+If the system operate under `Monotonic Writes` (ensures that writes from the same `owner_id` preserve their relative order), no conflicts possible. 
+Otherwise, conflict are possible, although it should not happen under normal circumstances. We do not prevent concurrent writes by the same `owner_id`, 
+but we detect them and rollback the conflicting change.
+                                                       
 
 ### Write path
  1) One database RTT to lookup data by `owner_id` as an attempt to ensure a total order of updates by `owner_id` 
- 2) One akka-sharding RTT to perform `Conditional Put`
-           
+ 2) One akka-sharding clustered RTT to perform `Conditional Put` 
 
 ### Ensure correctness: Conflict detection and resolution strategy
 
-We do not prevent concurrent writes by the same `owner_id`, although it should not happen under normal circumstances. But we detect them and rollback the conflicting change.
 
 
 
