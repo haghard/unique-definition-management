@@ -13,13 +13,12 @@ import scala.concurrent.*
 import scala.reflect.ClassTag
 import scala.util.Using
 
-final case class DefinitionOwnershipRow(
+final case class DefinitionIndexViewRow(
   name: String,
   definition: Definition,
   ownerId: UUID,
-  entityId: Long,
+  bucketId: Long,
   sequenceNr: Long,
-  causalToken: Long,
   when: Long
 )
 
@@ -37,58 +36,77 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
   ): BaseColumnType[T] =
     MappedColumnType.base((pb: T) => pb.toByteArray, (bts: Array[Byte]) => companion.parseFrom(bts))
 
-  class DefinitionIndexView(tag: Tag) extends Table[DefinitionOwnershipRow](tag, "definition_index_view") {
+  class DefinitionIndexView(tag: Tag) extends Table[DefinitionIndexViewRow](tag, "definition_index_view") {
 
-    def name: Rep[String] = column[String]("NAME", O.Length(255))
+    // for debug only
+    def name: Rep[String] = column[String]("NAME", O.Length(400))
 
     def definition: Rep[Definition] = column[Definition]("DEFINITION")
 
     def ownerId: Rep[UUID] = column[UUID]("OWNER_ID")
 
-    def entityId: Rep[Long] = column[Long]("ENTITY_ID")
-
+    // coordinates/location inside akka-sharding
+    def bucketId: Rep[Long]   = column[Long]("BUCKET_ID")
     def sequenceNr: Rep[Long] = column[Long]("SEQ_NUM")
-
-    def causalToken: Rep[Long] = column[Long]("CAUSAL_TOKEN")
+    // coordinates
 
     def when: Rep[Long] = column[Long]("WHEN")
 
-    def pk: slick.lifted.PrimaryKey = primaryKey("OWNERSHIP__PK", (entityId, sequenceNr))
+    def pk: slick.lifted.PrimaryKey = primaryKey("DIV__PK", (bucketId, sequenceNr))
 
-    def ownerIdIndex: slick.lifted.Index = index("OWNERSHIP__OWNER_ID_IND", ownerId)
+    def ownerIdIndex: slick.lifted.Index = index("DIV__OWNER_ID_IND", ownerId)
 
-    def * : slick.lifted.ProvenShape[DefinitionOwnershipRow] =
-      (name, definition, ownerId, entityId, sequenceNr, causalToken, when) <>
-        ((DefinitionOwnershipRow.apply _).tupled, DefinitionOwnershipRow.unapply)
+    def * : slick.lifted.ProvenShape[DefinitionIndexViewRow] =
+      (name, definition, ownerId, bucketId, sequenceNr, when) <>
+        ((DefinitionIndexViewRow.apply _).tupled, DefinitionIndexViewRow.unapply)
   }
 
   object definitionIndexView extends TableQuery(new DefinitionIndexView(_)) {
     self =>
 
-    val locationByOwnerId = Compiled { (ownerId: Rep[UUID]) =>
-      self.filter(_.ownerId === ownerId).map(rep => (rep.entityId, rep.sequenceNr, rep.definition, rep.causalToken))
+    implicit val ec: scala.concurrent.ExecutionContext = ExecutionContext.parasitic
+
+    val locationDefinition = Compiled { (ownerId: Rep[UUID]) =>
+      self.filter(_.ownerId === ownerId).map(rep => (rep.bucketId, rep.sequenceNr, rep.definition))
     }
 
-    val GetCausalToken = Compiled { (ownerId: Rep[UUID]) =>
-      self.filter(_.ownerId === ownerId).map(rep => rep.causalToken)
-    }
+    def getLocationDefinition(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long, Definition)]] =
+      db.run(locationDefinition(ownerId).result)
 
-    def getLocationByOwnerId(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long, Definition, Long)]] =
-      db.run(locationByOwnerId(ownerId).result)
-
-    def getCausalToken(ownerId: UUID): Future[Option[Long]] =
-      db.run(GetCausalToken(ownerId).result.headOption)
-
-    def acquire(row: DefinitionOwnershipRow): Future[Done] =
+    def update(row: DefinitionIndexViewRow): Future[Done] =
       db.run(definitionIndexView.insertOrUpdate(row)).map(_ => Done)(ExecutionContext.parasitic)
+
+    def create(row: DefinitionIndexViewRow): Future[Boolean] = {
+      val dbio =
+        definitionIndexView
+          .filter(_.ownerId === row.ownerId)
+          .map(rep => (rep.bucketId, rep.sequenceNr))
+          .forUpdate
+          .result
+          .headOption
+          .flatMap {
+            case Some((bucketId, sequenceNr)) =>
+              // println(s"$bucketId:$sequenceNr vs ${row.bucketId}:${row.sequenceNr}")
+              if (bucketId != row.bucketId || sequenceNr != row.sequenceNr) {
+                DBIO.successful(false)
+              } else {
+                DBIO.successful(true)
+              }
+            case None =>
+              definitionIndexView.insertOrUpdate(row).map(_ => true)
+          }
+          .transactionally
+
+      db.run(dbio)
+    }
 
     def releaseFailed(entityId: Long, seqNum: Long): Future[Done] =
       db.run(DBIO.from(Future.failed(new Exception(s"Boom($entityId,$seqNum) !!!"))))
 
-    def release(entityId: Long, seqNum: Long): Future[Done] =
+    def release(bucketId: Long, seqNum: Long): Future[Done] =
       db
-        .run(definitionIndexView.filter(rep => rep.entityId === entityId && rep.sequenceNr === seqNum).delete)
-        .map(_ => Done)(ExecutionContext.parasitic)
+        .run(definitionIndexView.filter(rep => rep.bucketId === bucketId && rep.sequenceNr === seqNum).delete)
+        .map(_ => Done)
   }
 
   val tables           = Seq(definitionIndexView)

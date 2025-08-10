@@ -21,30 +21,28 @@ option (scalapb.options) = {
 
 service DefinitionService {
   rpc ConditionalPut(PutRequest) returns (PutReply) {}
-  rpc GetCausalToken(GetCausalTokenRequest) returns (GetCausalTokenReply) {}
+  rpc GetDefinitionLocation(GetDefinitionLocationRequest) returns (GetDefinitionLocationReply) {}
 }
 
-message GetCausalTokenRequest {
+message GetDefinitionLocationRequest {
   string owner_id = 1;
 }
 
-message GetCausalTokenReply {
-  int64 causal_token = 3;
+message GetDefinitionLocationReply {
+  com.definition.domain.DefinitionLocation prev_definition_location = 1; //causal_token
+  com.definition.domain.Definition definition = 2;
 }
 
 message PutRequest {
   string owner_id = 1;
   com.definition.domain.Definition definition = 2 [(scalapb.field).no_box = true];
-  int64 causal_token = 3;
+  com.definition.domain.DefinitionLocation definition_location = 3; //acts as causal_token
 }
-
-
 
 message PutReply {
   string owner_id = 1;
   StatusCode status_code = 2;
-  int64 causal_token = 3;
-  //com.definition.domain.DefinitionLocation definition_location = 3 [(scalapb.field).no_box = true];
+  com.definition.domain.DefinitionLocation definition_location = 3;
 
   enum StatusCode {
     Undefined = 0;
@@ -53,10 +51,8 @@ message PutReply {
     Reserved = 3;
     NotFound = 4;
     IllegalState = 5;
-    WrongCausalToken = 6;
-    CausalTokenNotFound=7;
-    AnotherDefinitionFound = 8;
-    InvalidCausalToken=9;
-    ConcurrentAccess=10;
+    LocationNotFound=6;
+    AnotherDefinitionFound = 7;
+    InvalidCausalToken=8;
   }
 }

@@ -1,5 +1,6 @@
 package com.definition
 
+import akka.Done
 import akka.actor.RootActorPath
 import akka.actor.typed.scaladsl.AskPattern.*
 import akka.actor.typed.scaladsl.Behaviors
@@ -23,6 +24,7 @@ import com.definition.domain.*
 import com.definition.domain.Event as PbEvent
 
 import java.util.UUID
+import scala.concurrent.*
 
 object Guardian {
 
@@ -39,7 +41,7 @@ object Guardian {
     tag: String,
     dbConfig: DatabaseConfig[MySQLProfile],
     name: String,
-    region: ActorRef[com.definition.domain.Release]
+    region: ActorRef[com.definition.domain.Cmd]
   )(implicit system: ActorSystem[_]) = {
     // PersistenceQuery(system).readJournalFor[JdbcReadJournal](JdbcReadJournal.Identifier)
     val resolver: ActorRefResolver = ActorRefResolver(system)
@@ -64,31 +66,58 @@ object Guardian {
         () =>
           (env: akka.projection.eventsourced.EventEnvelope[PbEvent]) =>
             env.event match {
-              case acquired: Acquired =>
+              case c: Created =>
                 val row =
-                  DefinitionOwnershipRow(
-                    name = acquired.definition.name,
-                    definition = acquired.definition,
-                    ownerId = UUID.fromString(acquired.ownerId),
-                    entityId = env.persistenceId.toLong,
-                    sequenceNr = acquired.seqNum,
-                    // sequenceNr = env.sequenceNr,
-                    causalToken = acquired.causalToken,
+                  DefinitionIndexViewRow(
+                    name = c.definition.name,
+                    definition = c.definition,
+                    ownerId = UUID.fromString(c.ownerId),
+                    bucketId = env.persistenceId.toLong,
+                    sequenceNr = c.seqNum,
                     when = env.timestamp
                   )
-                // TODO: LWW Allow concurrency and
-                Tables.definitionIndexView.acquire(row)
 
-              case ReleaseRequested(ownerId, prevDefinitionLocation) =>
+                Tables.definitionIndexView
+                  .create(row)
+                  .flatMap {
+                    case true =>
+                      Future.successful(Done)
+                    case false =>
+                      system.log.error(s"Create conflict detected by user ${row.ownerId.toString}")
+                      region.askWithStatus[Done](replyTo =>
+                        com.definition.domain
+                          .Rollback(c.ownerId, c.rollbackLocation, resolver.toSerializationFormat(replyTo))
+                      )
+                  }(system.executionContext)
+
+              case u: Updated =>
+                val row =
+                  DefinitionIndexViewRow(
+                    name = u.definition.name,
+                    definition = u.definition,
+                    ownerId = UUID.fromString(u.ownerId),
+                    bucketId = env.persistenceId.toLong,
+                    sequenceNr = u.seqNum,
+                    when = env.timestamp
+                  )
+                Tables.definitionIndexView.update(row)
+
+              case ReleaseRequested(ownerId, prevDefinitionLocation, rollbackLocation) =>
                 // Future.failed(new Exception(s"Boom !!!"))
                 region.askWithStatus(replyTo =>
                   com.definition.domain
-                    .Release(ownerId, prevDefinitionLocation, resolver.toSerializationFormat(replyTo))
+                    .Release(ownerId, prevDefinitionLocation, rollbackLocation, resolver.toSerializationFormat(replyTo))
+                )
+
+              case RollbackRequested(ownerId, rollbackLocation) =>
+                region.askWithStatus(replyTo =>
+                  com.definition.domain
+                    .Rollback(ownerId, rollbackLocation, resolver.toSerializationFormat(replyTo))
                 )
 
               case cmd: Released =>
                 Tables.definitionIndexView.release(
-                  cmd.prevDefinitionLocation.entityId,
+                  cmd.prevDefinitionLocation.bucketId,
                   cmd.prevDefinitionLocation.seqNum
                 )
             }
@@ -96,7 +125,7 @@ object Guardian {
       .withSaveOffset(afterEnvelopes = 10, afterDuration = 500.millis)
   }
 
-  def initProjections(region: ActorRef[com.definition.domain.Release])(implicit system: ActorSystem[_]): Unit = {
+  def initProjections(region: ActorRef[com.definition.domain.Cmd])(implicit system: ActorSystem[_]): Unit = {
     val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
     ShardedDaemonProcess(system).init(
       name,
@@ -155,7 +184,7 @@ object Guardian {
 
             Tables.createAllTables()
 
-            initProjections(takenDefinition.narrow[com.definition.domain.Release])
+            initProjections(takenDefinition /*.narrow[com.definition.domain.Release]*/ )
 
             Bootstrap(takenDefinition, selfAddress.host.get, grpcPort)(ctx.system)
             Behaviors.same

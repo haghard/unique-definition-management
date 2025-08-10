@@ -19,39 +19,38 @@ final class DefinitionServiceImpl(
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
   implicit val sch: Scheduler                                = system.scheduler
-  implicit val askTimeout: akka.util.Timeout                 = akka.util.Timeout(3.seconds)
+  implicit val askTimeout: akka.util.Timeout                 = akka.util.Timeout(7.seconds)
   implicit val ec: scala.concurrent.ExecutionContextExecutor = system.executionContext
 
   override def conditionalPut(in: PutRequest): Future[PutReply] =
-    in.causalToken match {
-      case 0 =>
+    in.definitionLocation match {
+      case None =>
         create(in)
-
-      case causalToken =>
-        if (causalToken > 0)
-          update(in)
-        else
-          Future.successful(
-            PutReply(
-              in.ownerId,
-              PutReply.StatusCode.InvalidCausalToken,
-              -1
-            )
-          )
+      case Some(_) =>
+        update(in)
     }
 
-  override def getCausalToken(in: GetCausalTokenRequest): Future[GetCausalTokenReply] =
+  override def getDefinitionLocation(in: GetDefinitionLocationRequest): Future[GetDefinitionLocationReply] =
     Tables.definitionIndexView
-      .getCausalToken(UUID.fromString(in.ownerId))
-      .map(tokenOpt => GetCausalTokenReply(tokenOpt.getOrElse(0)))
+      .getLocationDefinition(UUID.fromString(in.ownerId))
+      .map { rows =>
+        rows.size match {
+          case 0 => GetDefinitionLocationReply(None, None)
+          case 1 =>
+            val (entityId, seqNum, definition) = rows.head
+            GetDefinitionLocationReply(Some(DefinitionLocation(entityId, seqNum)), Some(definition))
+          case _ =>
+            GetDefinitionLocationReply(Some(DefinitionLocation(-1, -1)), None)
+        }
+      }
 
   def create(in: PutRequest) =
     Tables.definitionIndexView
-      .getLocationByOwnerId(UUID.fromString(in.ownerId))
+      .getLocationDefinition(UUID.fromString(in.ownerId))
       .flatMap { rows =>
         rows.size match {
           case 0 =>
-            // Unprotected concurrent access is allowed
+            // Concurrent modifications resolutions strategy = (detect it on the read side and rollback)
             shardRegion
               .askWithStatus[PutReply] { askReplyTo =>
                 Create(
@@ -69,13 +68,13 @@ final class DefinitionServiceImpl(
                 )
               }
           case 1 =>
-            val (_, _, definition, causalToken) = rows.head
+            val (entityId, seqNum, definition) = rows.head
             if (definition == in.definition) {
               Future.successful(
                 PutReply(
                   in.ownerId,
                   PutReply.StatusCode.OK2,
-                  causalToken
+                  Some(DefinitionLocation(entityId, seqNum))
                 )
               )
             } else {
@@ -83,7 +82,7 @@ final class DefinitionServiceImpl(
                 PutReply(
                   in.ownerId,
                   PutReply.StatusCode.AnotherDefinitionFound,
-                  causalToken
+                  Some(DefinitionLocation(entityId, seqNum))
                 )
               )
             }
@@ -92,7 +91,7 @@ final class DefinitionServiceImpl(
               PutReply(
                 in.ownerId,
                 PutReply.StatusCode.IllegalState,
-                -1
+                Some(DefinitionLocation(-1, -1))
               )
             )
         }
@@ -100,7 +99,7 @@ final class DefinitionServiceImpl(
 
   def update(in: PutRequest) =
     Tables.definitionIndexView
-      .getLocationByOwnerId(UUID.fromString(in.ownerId))
+      .getLocationDefinition(UUID.fromString(in.ownerId))
       .flatMap { rows =>
         rows.size match {
           case 0 =>
@@ -108,14 +107,14 @@ final class DefinitionServiceImpl(
               PutReply(
                 in.ownerId,
                 PutReply.StatusCode.NotFound,
-                -1
+                Some(DefinitionLocation(-1, -1))
               )
             )
           case 1 =>
-            // Unprotected concurrent access is allowed
-            val (entityId, seqNum, definition, causalToken) = rows.head
+            // Concurrent modifications resolutions strategy = (detect it on the read side and rollback)
+            val (bucketId, seqNum, definition) = rows.head
             if (in.definition != definition) {
-              if (causalToken == in.causalToken) {
+              if (bucketId == in.getDefinitionLocation.bucketId && seqNum == in.getDefinitionLocation.seqNum) {
                 shardRegion
                   .askWithStatus[PutReply] { replyTo =>
                     Update(
@@ -129,7 +128,7 @@ final class DefinitionServiceImpl(
                         in.definition.zipCode,
                         in.definition.brand
                       ),
-                      DefinitionLocation(entityId, seqNum),
+                      DefinitionLocation(bucketId, seqNum),
                       actorRefResolver.toSerializationFormat(replyTo)
                     )
                   }
@@ -137,8 +136,8 @@ final class DefinitionServiceImpl(
                 Future.successful(
                   PutReply(
                     in.ownerId,
-                    PutReply.StatusCode.CausalTokenNotFound,
-                    causalToken
+                    PutReply.StatusCode.LocationNotFound,
+                    Some(DefinitionLocation(-1, -1))
                   )
                 )
               }
@@ -147,7 +146,7 @@ final class DefinitionServiceImpl(
                 PutReply(
                   in.ownerId,
                   PutReply.StatusCode.OK2,
-                  causalToken
+                  Some(DefinitionLocation(bucketId, seqNum))
                 )
               )
             }
@@ -158,7 +157,7 @@ final class DefinitionServiceImpl(
               PutReply(
                 in.ownerId,
                 PutReply.StatusCode.IllegalState,
-                -1
+                Some(DefinitionLocation(-1, -1))
               )
             )
         }

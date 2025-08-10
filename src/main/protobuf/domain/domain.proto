@@ -44,7 +44,15 @@ message Release {
 
   string owner_id = 1;
   DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
+  DefinitionLocation rollback_location = 3 [(scalapb.field).no_box = true];
   string replyTo = 4;
+}
+
+message Rollback {
+  option (scalapb.message).extends = "Cmd";
+  string owner_id = 1;
+  DefinitionLocation rollback_location = 2 [(scalapb.field).no_box = true];
+  string replyTo = 3;
 }
 
 message Passivate {
@@ -52,12 +60,19 @@ message Passivate {
 }
 
 
-message Acquired {
+message Created {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
   int64 seq_num = 3;
-  int64 causal_token = 4;
+  DefinitionLocation rollback_location = 4 [(scalapb.field).no_box = true];
+}
+
+message Updated {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  int64 seq_num = 3;
 }
 
 message Released {
@@ -70,8 +85,14 @@ message ReleaseRequested {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
   DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
+  DefinitionLocation rollback_location = 3 [(scalapb.field).no_box = true];
 }
 
+message RollbackRequested {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  DefinitionLocation rollback_location = 2 [(scalapb.field).no_box = true];
+}
 
 message TakenDefinitionState {
   map<string, int64> contentKeySeqNum=1;
@@ -88,6 +109,6 @@ message Definition {
 }
 
 message DefinitionLocation {
-  int64 entity_id = 1;
+  int64 bucket_id = 1;
   int64 seq_num = 2;
 }
