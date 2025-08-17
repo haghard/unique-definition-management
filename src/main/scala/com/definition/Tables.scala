@@ -76,7 +76,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     def update(row: DefinitionIndexViewRow): Future[Done] =
       db.run(definitionIndexView.insertOrUpdate(row)).map(_ => Done)(ExecutionContext.parasitic)
 
-    def create(row: DefinitionIndexViewRow): Future[Boolean] = {
+    def conditionalCreate(row: DefinitionIndexViewRow): Future[Boolean] = {
       val dbio =
         definitionIndexView
           .filter(_.ownerId === row.ownerId)
@@ -86,12 +86,10 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
           .headOption
           .flatMap {
             case Some((bucketId, sequenceNr)) =>
-              // println(s"$bucketId:$sequenceNr vs ${row.bucketId}:${row.sequenceNr}")
-              if (bucketId != row.bucketId || sequenceNr != row.sequenceNr) {
-                DBIO.successful(false)
-              } else {
+              if (bucketId == row.bucketId && sequenceNr == row.sequenceNr)
                 DBIO.successful(true)
-              }
+              else
+                DBIO.successful(false)
             case None =>
               definitionIndexView.insertOrUpdate(row).map(_ => true)
           }

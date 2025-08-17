@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+import "scalapb/scalapb.proto";
+import "domain/domain.proto";
+
+option java_multiple_files = true;
+option java_package = "com.definition.domain.event";
+
+package com.definition.domain.events;
+
+option (scalapb.options) = {
+  lenses: true,
+  preserve_unknown_fields: false,
+  no_default_values_in_constructor: false,
+  no_primitive_wrappers: true,
+  single_file: true,
+  preamble: "sealed trait Event extends scalapb.GeneratedMessage",
+};
+
+message Created {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  int64 seq_num = 3;
+  DefinitionLocation rollback_location = 4 [(scalapb.field).no_box = true];
+}
+
+message Updated {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  int64 seq_num = 3;
+
+  //ReleaseRequested
+  DefinitionLocation prev_definition_location = 4 [(scalapb.field).no_box = true];
+  DefinitionLocation rollback_location = 5 [(scalapb.field).no_box = true];
+}
+
+message Released {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
+}
+
+/*message ReleaseRequested {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
+  DefinitionLocation rollback_location = 3 [(scalapb.field).no_box = true];
+}
+
+message Updated {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  int64 seq_num = 3;
+}*/
+
+
+message RollbackRequested {
+  option (scalapb.message).extends = "Event";
+  string owner_id = 1;
+  DefinitionLocation rollback_location = 2 [(scalapb.field).no_box = true];
+}

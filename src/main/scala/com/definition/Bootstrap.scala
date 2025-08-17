@@ -7,6 +7,7 @@ import akka.actor.CoordinatedShutdown.*
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
 import com.definition.api.*
+import com.definition.domain.command.Cmd
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.Future
@@ -18,7 +19,7 @@ object Bootstrap {
 }
 
 final case class Bootstrap(
-  shardRegion: ActorRef[com.definition.domain.Cmd],
+  shardRegion: ActorRef[Cmd],
   bindHost: String,
   port: Int
 )(implicit system: ActorSystem[_]) {

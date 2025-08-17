@@ -13,20 +13,20 @@ import scala.concurrent.duration.DurationInt
 import com.definition.domain.*
 import com.definition.api.*
 import Implicits.*
-import com.definition.domain.Cmd as PbCmd
-import com.definition.domain.Event as PbEvent
+import com.definition.domain.command.*
+import com.definition.domain.event.*
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
 object TakenDefinition {
 
-  val TypeKey: EntityTypeKey[PbCmd] = EntityTypeKey[PbCmd](name = "tkn-dfn")
+  val TypeKey: EntityTypeKey[Cmd] = EntityTypeKey[Cmd](name = "tkn-dfn")
 
   object Extractor {
-    def apply(numberOfShards: Int): ShardingMessageExtractor[PbCmd, PbCmd] =
-      new ShardingMessageExtractor[PbCmd, PbCmd] {
-        override def entityId(cmd: PbCmd): String =
+    def apply(numberOfShards: Int): ShardingMessageExtractor[Cmd, Cmd] =
+      new ShardingMessageExtractor[Cmd, Cmd] {
+        override def entityId(cmd: Cmd): String =
           cmd match {
             case Create(_, definition, _) =>
               val bts = ByteBuffer.wrap(definition.contentKey.getBytes(StandardCharsets.UTF_8))
@@ -46,11 +46,11 @@ object TakenDefinition {
         override def shardId(entityId: String): String =
           math.abs(entityId.toLong % numberOfShards).toString
 
-        override def unwrapMessage(cmd: PbCmd): PbCmd = cmd
+        override def unwrapMessage(cmd: Cmd): Cmd = cmd
       }
   }
 
-  def apply(entityCtx: EntityContext[PbCmd], snapshotEveryNEvents: Int = 5): Behavior[PbCmd] =
+  def apply(entityCtx: EntityContext[Cmd], snapshotEveryNEvents: Int = 5): Behavior[Cmd] =
     Behaviors.setup { implicit ctx =>
       implicit val refResolver: ActorRefResolver = ActorRefResolver(ctx.system)
 
@@ -58,7 +58,7 @@ object TakenDefinition {
       val entityId = path.elements.last.toLong
 
       EventSourcedBehavior
-        .withEnforcedReplies[PbCmd, PbEvent, TakenDefinitionState](
+        .withEnforcedReplies[Cmd, Event, TakenDefinitionState](
           PersistenceId.ofUniqueId(entityCtx.entityId),
           TakenDefinitionState(),
           (state, cmd) => state.applyCmd(cmd, entityId),
@@ -90,19 +90,19 @@ object TakenDefinition {
 
   implicit class TakenDefinitionStateOps(val pbState: TakenDefinitionState) extends AnyVal {
     def applyCmd(
-      cmd: PbCmd,
+      cmd: Cmd,
       entityId: Long
-    )(implicit ctx: ActorContext[PbCmd], resolver: ActorRefResolver): ReplyEffect[PbEvent, TakenDefinitionState] = {
+    )(implicit ctx: ActorContext[Cmd], resolver: ActorRefResolver): ReplyEffect[Event, TakenDefinitionState] = {
       val nextSeqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
       cmd match {
         case Create(ownerId, definition, replyTo) =>
           ctx.log.info(s"★★★> Create ${definition.name} to $ownerId")
-          // Thread.sleep(3_000) for local testing
+          Thread.sleep(3_000) // for local testing
 
           val rollbackLocation = DefinitionLocation(entityId, nextSeqNum)
           if (pbState.contentKeySeqNum.contains(definition.contentKey)) {
             Effect
-              .none[PbEvent, TakenDefinitionState]
+              .none[Event, TakenDefinitionState]
               .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
                 ctx.log.warn("Already reserved")
                 StatusReply.success(PutReply(ownerId, PutReply.StatusCode.Reserved, None))
@@ -127,7 +127,7 @@ object TakenDefinition {
 
           if (pbState.contentKeySeqNum.contains(definition.contentKey)) {
             Effect
-              .none[PbEvent, TakenDefinitionState]
+              .none[Event, TakenDefinitionState]
               .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
                 ctx.log.warn("Already reserved")
                 StatusReply.success(
@@ -142,8 +142,17 @@ object TakenDefinition {
             val rollbackLocation = DefinitionLocation(entityId, nextSeqNum)
             Effect
               .persist(
-                Updated(ownerId, definition, nextSeqNum),
-                ReleaseRequested(ownerId, prevDefinitionLocation, rollbackLocation)
+                Updated(
+                  ownerId,
+                  definition,
+                  nextSeqNum,
+                  // release
+                  prevDefinitionLocation,
+                  rollbackLocation
+                )
+                // UpdatedAndRelease
+                // Updated(ownerId, definition, nextSeqNum),
+                // ReleaseRequested(ownerId, prevDefinitionLocation, rollbackLocation)
               )
               .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
                 StatusReply.success(
@@ -192,7 +201,7 @@ object TakenDefinition {
                 }
             case None =>
               Effect
-                .none[PbEvent, TakenDefinitionState]
+                .none[Event, TakenDefinitionState]
                 .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
                   ctx.log.warn(s"Critical error: Failed to rollback $ownerId: $rollbackLocation")
                   StatusReply.success(Done)
@@ -201,21 +210,21 @@ object TakenDefinition {
 
         case Passivate() =>
           Effect
-            .none[PbEvent, TakenDefinitionState]
+            .none[Event, TakenDefinitionState]
             .thenRun(_ => ctx.log.info(s"Passivated: ${pbState.contentKeySeqNum.size}"))
             .thenStop()
             .thenNoReply()
       }
     }
 
-    def applyEvt(event: PbEvent)(implicit ctx: ActorContext[PbCmd]): TakenDefinitionState =
+    def applyEvt(event: Event)(implicit ctx: ActorContext[Cmd]): TakenDefinitionState =
       event match {
         case Created(ownerId, definition, seqNum, _) =>
           ctx.log.info("Created: {} by {}/{}", definition.name, ownerId, seqNum)
           // TODO: contentKeySeqNum - Use off-heap maps from one-nio
           val updatedIndex = pbState.contentKeySeqNum + (definition.contentKey -> seqNum)
           pbState.update(_.contentKeySeqNum := updatedIndex)
-        case Updated(ownerId, definition, seqNum) =>
+        case Updated(ownerId, definition, seqNum, _, _) =>
           ctx.log.info("Updated: {} by {}/{}", definition.name, ownerId, seqNum)
           val updatedIndex = pbState.contentKeySeqNum + (definition.contentKey -> seqNum)
           pbState.update(_.contentKeySeqNum := updatedIndex)
@@ -231,7 +240,7 @@ object TakenDefinition {
           ctx.log.info("Released:{} by {}/{}", definitionContentKey, ownerId, prevDefinitionLocation.seqNum)
           val updatedIndex = pbState.contentKeySeqNum - definitionContentKey
           pbState.update(_.contentKeySeqNum := updatedIndex)
-        case _: ReleaseRequested =>
+          // case _: ReleaseRequested =>
           pbState
         case _: RollbackRequested =>
           pbState

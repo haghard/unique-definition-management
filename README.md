@@ -12,7 +12,7 @@ You usually can't have both low latency and ordering in Distributed Systems.
 
 Each unique definition belongs to exactly one `owner_id` at any point in time - this is what we want to achieve.
 
-It is a relative order invariant. Acquiring a new definition requires a condition check, and then releasing my current definition which doesn't require ant checks and cannot fail. 
+It is a relative order invariant. Acquiring a new definition requires condition check, and then releasing its current definition which doesn't require any checks and cannot fail. 
 Causal ordering if enough to guarantee that we never violate it.
 
 If the system operate under `Monotonic Writes` (ensures that writes from the same `owner_id` preserve their relative order), no conflicts possible. 
@@ -84,8 +84,8 @@ Create conflict
 
 // Thread.sleep(3_000) for local testing
 
-grpcurl -d '{"definition":{"name":"aff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"bff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"aff645a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"bff645b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 
 ```

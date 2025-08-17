@@ -3,24 +3,23 @@ package com.definition.api
 import akka.actor.typed.*
 import akka.actor.typed.scaladsl.AskPattern.Askable
 
-import scala.concurrent.Future
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.*
 import com.definition.domain.*
-import com.definition.Tables
-import com.definition.domain.Cmd as PbCmd
+import com.definition.*
+import com.definition.domain.command.*
 
 import java.util.UUID
 
 final class DefinitionServiceImpl(
-  shardRegion: ActorRef[PbCmd]
+  takenDefinition: ActorRef[Cmd]
 )(implicit system: ActorSystem[_])
     extends DefinitionService {
 
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
-  implicit val sch: Scheduler                                = system.scheduler
-  implicit val askTimeout: akka.util.Timeout                 = akka.util.Timeout(7.seconds)
-  implicit val ec: scala.concurrent.ExecutionContextExecutor = system.executionContext
+  implicit val sch: Scheduler                = system.scheduler
+  implicit val askTimeout: akka.util.Timeout = Guardian.askTo
+  implicit val ec: ExecutionContext          = system.executionContext
 
   override def conditionalPut(in: PutRequest): Future[PutReply] =
     in.definitionLocation match {
@@ -50,8 +49,9 @@ final class DefinitionServiceImpl(
       .flatMap { rows =>
         rows.size match {
           case 0 =>
-            // Concurrent modifications resolutions strategy = (detect it on the read side and rollback)
-            shardRegion
+            // Use case: Same entity_id is used to create different definitions
+            // Concurrent modifications resolutions strategy = detect it on the read side and rollback losers
+            takenDefinition
               .askWithStatus[PutReply] { askReplyTo =>
                 Create(
                   in.ownerId,
@@ -111,11 +111,12 @@ final class DefinitionServiceImpl(
               )
             )
           case 1 =>
-            // Concurrent modifications resolutions strategy = (detect it on the read side and rollback)
+            // Use case: Same entity_id is used to create different definitions
+            // Concurrent modifications resolutions strategy = (detect it on the read side and losers)
             val (bucketId, seqNum, definition) = rows.head
             if (in.definition != definition) {
               if (bucketId == in.getDefinitionLocation.bucketId && seqNum == in.getDefinitionLocation.seqNum) {
-                shardRegion
+                takenDefinition
                   .askWithStatus[PutReply] { replyTo =>
                     Update(
                       in.ownerId,
@@ -163,3 +164,12 @@ final class DefinitionServiceImpl(
         }
       }
 }
+
+/*
+akka.pattern.retry(
+    attempt = () => mkF(ownerId, definition),
+    attempts = 8,
+    delayFunction = { i => Option(75.millis) }
+)(system.executionContext, system.scheduler.toClassic)
+
+ */

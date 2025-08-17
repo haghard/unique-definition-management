@@ -10,7 +10,7 @@ import akka.cluster.ddata.SelfUniqueAddress
 import akka.cluster.sharding.typed.{ClusterShardingSettings, ShardedDaemonProcessSettings}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, ShardedDaemonProcess}
 import akka.cluster.typed.SelfUp
-import akka.cluster.{utils, Member}
+import akka.cluster.*
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.slick.SlickProjection
@@ -20,13 +20,15 @@ import slick.jdbc.MySQLProfile
 
 import scala.collection.immutable
 import scala.concurrent.duration.DurationInt
-import com.definition.domain.*
-import com.definition.domain.Event as PbEvent
+import com.definition.domain.command.*
+import com.definition.domain.event.*
 
 import java.util.UUID
 import scala.concurrent.*
 
 object Guardian {
+
+  implicit val askTo: akka.util.Timeout = akka.util.Timeout(5.seconds)
 
   sealed trait Protocol
   object Protocol {
@@ -41,11 +43,10 @@ object Guardian {
     tag: String,
     dbConfig: DatabaseConfig[MySQLProfile],
     name: String,
-    region: ActorRef[com.definition.domain.Cmd]
+    region: ActorRef[Cmd]
   )(implicit system: ActorSystem[_]) = {
     // PersistenceQuery(system).readJournalFor[JdbcReadJournal](JdbcReadJournal.Identifier)
     val resolver: ActorRefResolver = ActorRefResolver(system)
-    implicit val to                = akka.util.Timeout(3.seconds)
 
     /*SlickProjection
       .groupedWithin(
@@ -61,10 +62,10 @@ object Guardian {
       .atLeastOnceAsync(
         ProjectionId(name, tag),
         // EventSourcedProvider.eventsBySlices()
-        EventSourcedProvider.eventsByTag[PbEvent](system, JdbcReadJournal.Identifier, tag),
+        EventSourcedProvider.eventsByTag[Event](system, JdbcReadJournal.Identifier, tag),
         dbConfig,
         () =>
-          (env: akka.projection.eventsourced.EventEnvelope[PbEvent]) =>
+          (env: akka.projection.eventsourced.EventEnvelope[Event]) =>
             env.event match {
               case c: Created =>
                 val row =
@@ -78,15 +79,14 @@ object Guardian {
                   )
 
                 Tables.definitionIndexView
-                  .create(row)
+                  .conditionalCreate(row)
                   .flatMap {
                     case true =>
                       Future.successful(Done)
                     case false =>
                       system.log.error(s"Create conflict detected by user ${row.ownerId.toString}")
                       region.askWithStatus[Done](replyTo =>
-                        com.definition.domain
-                          .Rollback(c.ownerId, c.rollbackLocation, resolver.toSerializationFormat(replyTo))
+                        Rollback(c.ownerId, c.rollbackLocation, resolver.toSerializationFormat(replyTo))
                       )
                   }(system.executionContext)
 
@@ -100,32 +100,36 @@ object Guardian {
                     sequenceNr = u.seqNum,
                     when = env.timestamp
                   )
-                Tables.definitionIndexView.update(row)
-
-              case ReleaseRequested(ownerId, prevDefinitionLocation, rollbackLocation) =>
-                // Future.failed(new Exception(s"Boom !!!"))
-                region.askWithStatus(replyTo =>
-                  com.definition.domain
-                    .Release(ownerId, prevDefinitionLocation, rollbackLocation, resolver.toSerializationFormat(replyTo))
-                )
+                Tables.definitionIndexView
+                  .update(row)
+                  .flatMap { _ =>
+                    region.askWithStatus[Done](replyTo =>
+                      Release(
+                        u.ownerId,
+                        u.prevDefinitionLocation,
+                        u.rollbackLocation,
+                        resolver.toSerializationFormat(replyTo)
+                      )
+                    )
+                  }(system.executionContext)
 
               case RollbackRequested(ownerId, rollbackLocation) =>
                 region.askWithStatus(replyTo =>
-                  com.definition.domain
-                    .Rollback(ownerId, rollbackLocation, resolver.toSerializationFormat(replyTo))
+                  Rollback(ownerId, rollbackLocation, resolver.toSerializationFormat(replyTo))
                 )
 
-              case cmd: Released =>
+              case r: Released =>
+                // TODO: Apply UpdatedAndReleased together. Joint update (Do a bunch of things together and have them all occurred together.)
                 Tables.definitionIndexView.release(
-                  cmd.prevDefinitionLocation.bucketId,
-                  cmd.prevDefinitionLocation.seqNum
+                  r.prevDefinitionLocation.bucketId,
+                  r.prevDefinitionLocation.seqNum
                 )
             }
       )
       .withSaveOffset(afterEnvelopes = 10, afterDuration = 500.millis)
   }
 
-  def initProjections(region: ActorRef[com.definition.domain.Cmd])(implicit system: ActorSystem[_]): Unit = {
+  def initProjections(region: ActorRef[Cmd])(implicit system: ActorSystem[_]): Unit = {
     val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
     ShardedDaemonProcess(system).init(
       name,
@@ -163,12 +167,12 @@ object Guardian {
             val shardingSettings = ClusterShardingSettings(system)
             val clusterSharding  = ClusterSharding(system)
 
-            val takenDefinition: ActorRef[com.definition.domain.Cmd] =
+            val takenDefinition: ActorRef[Cmd] =
               clusterSharding
                 .init(
                   Entity(TakenDefinition.TypeKey)(TakenDefinition(_, snapshotEveryNEvents = 10))
                     .withMessageExtractor(TakenDefinition.Extractor(shardingSettings.numberOfShards))
-                    .withStopMessage(com.definition.domain.Passivate())
+                    .withStopMessage(Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
                 )
 
@@ -184,8 +188,7 @@ object Guardian {
 
             Tables.createAllTables()
 
-            initProjections(takenDefinition /*.narrow[com.definition.domain.Release]*/ )
-
+            initProjections(takenDefinition)
             Bootstrap(takenDefinition, selfAddress.host.get, grpcPort)(ctx.system)
             Behaviors.same
           }
