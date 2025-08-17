@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+import "scalapb/scalapb.proto";
+import "domain/domain.proto";
+
+option java_multiple_files = true;
+option java_package = "com.definition.domain.command";
+
+package com.definition.domain.commands;
+
+option (scalapb.options) = {
+  lenses: true,
+  preserve_unknown_fields: false,
+  no_default_values_in_constructor: false,
+  no_primitive_wrappers: true,
+  single_file: true,
+  preamble: "sealed trait Cmd extends scalapb.GeneratedMessage",
+};
+
+message Create {
+  option (scalapb.message).extends = "Cmd";
+
+  string owner_id = 1;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  string replyTo = 3;
+}
+
+message Update {
+  option (scalapb.message).extends = "Cmd";
+
+  string owner_id = 1;
+  Definition new_definition = 2 [(scalapb.field).no_box = true];
+  DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
+  string replyTo = 5;
+}
+
+message Release {
+  option (scalapb.message).extends = "Cmd";
+
+  string owner_id = 1;
+  DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
+  DefinitionLocation rollback_location = 3 [(scalapb.field).no_box = true];
+  string replyTo = 4;
+}
+
+message Rollback {
+  option (scalapb.message).extends = "Cmd";
+  string owner_id = 1;
+  DefinitionLocation rollback_location = 2 [(scalapb.field).no_box = true];
+  string replyTo = 3;
+}
+
+message Passivate {
+  option (scalapb.message).extends = "Cmd";
+}
