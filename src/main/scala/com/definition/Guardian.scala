@@ -24,13 +24,13 @@ import com.definition.domain.command.*
 import com.definition.domain.event.*
 
 import java.util.UUID
-import scala.concurrent.*
 
 object Guardian {
 
   implicit val askTo: akka.util.Timeout = akka.util.Timeout(5.seconds)
 
   sealed trait Protocol
+
   object Protocol {
     final case class SelfUpMsg(mba: immutable.SortedSet[Member]) extends Protocol
   }
@@ -43,7 +43,7 @@ object Guardian {
     tag: String,
     dbConfig: DatabaseConfig[MySQLProfile],
     name: String,
-    region: ActorRef[Cmd]
+    takenDefinitions: ActorRef[Cmd]
   )(implicit system: ActorSystem[_]) = {
     // PersistenceQuery(system).readJournalFor[JdbcReadJournal](JdbcReadJournal.Identifier)
     val resolver: ActorRefResolver = ActorRefResolver(system)
@@ -67,63 +67,50 @@ object Guardian {
         () =>
           (env: akka.projection.eventsourced.EventEnvelope[Event]) =>
             env.event match {
-              case c: Created =>
-                val row =
-                  DefinitionIndexViewRow(
-                    name = c.definition.name,
-                    definition = c.definition,
-                    ownerId = UUID.fromString(c.ownerId),
-                    bucketId = env.persistenceId.toLong,
-                    sequenceNr = c.seqNum,
-                    when = env.timestamp
-                  )
-
-                Tables.definitionIndexView
-                  .conditionalCreate(row)
-                  .flatMap {
-                    case true =>
-                      Future.successful(Done)
-                    case false =>
-                      system.log.error(s"Create conflict detected by user ${row.ownerId.toString}")
-                      region.askWithStatus[Done](replyTo =>
-                        Rollback(c.ownerId, c.rollbackLocation, resolver.toSerializationFormat(replyTo))
-                      )
-                  }(system.executionContext)
-
-              case u: Updated =>
-                val row =
-                  DefinitionIndexViewRow(
-                    name = u.definition.name,
-                    definition = u.definition,
-                    ownerId = UUID.fromString(u.ownerId),
-                    bucketId = env.persistenceId.toLong,
-                    sequenceNr = u.seqNum,
-                    when = env.timestamp
-                  )
-                Tables.definitionIndexView
-                  .update(row)
-                  .flatMap { _ =>
-                    region.askWithStatus[Done](replyTo =>
-                      Release(
-                        u.ownerId,
-                        u.prevDefinitionLocation,
-                        u.rollbackLocation,
+              case a: Acquired =>
+                a.prevDefinitionLocation match {
+                  case Some(prevDefinitionLocation) =>
+                    takenDefinitions.askWithStatus[Done](replyTo =>
+                      com.definition.domain.command.Replace(
+                        a.ownerId,
+                        a.definition,
+                        env.persistenceId.toLong,
+                        a.seqNum,
+                        prevDefinitionLocation,
                         resolver.toSerializationFormat(replyTo)
                       )
                     )
-                  }(system.executionContext)
 
-              case RollbackRequested(ownerId, rollbackLocation) =>
-                region.askWithStatus(replyTo =>
-                  Rollback(ownerId, rollbackLocation, resolver.toSerializationFormat(replyTo))
-                )
+                  case None =>
+                    val row =
+                      DefinitionIndexViewRow(
+                        name = a.definition.name,
+                        definition = a.definition,
+                        ownerId = UUID.fromString(a.ownerId),
+                        bucketId = env.persistenceId.toLong,
+                        sequenceNr = a.seqNum,
+                        when = env.timestamp
+                      )
+                    Tables.definitionIndexView.createAndUnlock(row)
+                }
 
               case r: Released =>
-                // TODO: Apply UpdatedAndReleased together. Joint update (Do a bunch of things together and have them all occurred together.)
-                Tables.definitionIndexView.release(
+                // All changes appear atomically
+                val row =
+                  DefinitionIndexViewRow(
+                    name = r.definition.name,
+                    definition = r.definition,
+                    ownerId = UUID.fromString(r.ownerId),
+                    bucketId = r.acquiredBucketId,
+                    sequenceNr = r.acquiredSeqNum,
+                    when = env.timestamp
+                  )
+                Tables.definitionIndexView.replaceAndUnlock(
+                  row,
                   r.prevDefinitionLocation.bucketId,
                   r.prevDefinitionLocation.seqNum
                 )
+
             }
       )
       .withSaveOffset(afterEnvelopes = 10, afterDuration = 500.millis)

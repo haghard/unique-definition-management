@@ -21,48 +21,22 @@ option (scalapb.options) = {
   preamble: "sealed trait Event extends scalapb.GeneratedMessage",
 };
 
-message Created {
-  option (scalapb.message).extends = "Event";
-  string owner_id = 1;
-  Definition definition = 2 [(scalapb.field).no_box = true];
-  int64 seq_num = 3;
-  DefinitionLocation rollback_location = 4 [(scalapb.field).no_box = true];
-}
-
-message Updated {
+message Acquired {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
   int64 seq_num = 3;
 
-  //ReleaseRequested
-  DefinitionLocation prev_definition_location = 4 [(scalapb.field).no_box = true];
-  DefinitionLocation rollback_location = 5 [(scalapb.field).no_box = true];
+  //Release DefinitionLocation
+  DefinitionLocation prev_definition_location = 4; //None->Create|Some(_)-> Update
 }
 
 message Released {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
   DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
-}
+  Definition definition = 3 [(scalapb.field).no_box = true];
 
-/*message ReleaseRequested {
-  option (scalapb.message).extends = "Event";
-  string owner_id = 1;
-  DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
-  DefinitionLocation rollback_location = 3 [(scalapb.field).no_box = true];
-}
-
-message Updated {
-  option (scalapb.message).extends = "Event";
-  string owner_id = 1;
-  Definition definition = 2 [(scalapb.field).no_box = true];
-  int64 seq_num = 3;
-}*/
-
-
-message RollbackRequested {
-  option (scalapb.message).extends = "Event";
-  string owner_id = 1;
-  DefinitionLocation rollback_location = 2 [(scalapb.field).no_box = true];
+  int64 acquired_seq_num = 4;
+  int64 acquired_bucket_id = 5;
 }

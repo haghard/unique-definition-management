@@ -3,7 +3,8 @@ package com.definition
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.projection.slick.SlickProjection
-import com.definition.domain.Definition
+import com.definition.api.{PutReply, PutRequest}
+import com.definition.domain.{Definition, DefinitionLocation}
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 import slick.basic.DatabaseConfig
 import slick.jdbc.{GetResult, MySQLProfile}
@@ -11,7 +12,7 @@ import slick.jdbc.{GetResult, MySQLProfile}
 import java.util.UUID
 import scala.concurrent.*
 import scala.reflect.ClassTag
-import scala.util.Using
+import scala.util.{Failure, Success, Using}
 
 final case class DefinitionIndexViewRow(
   name: String,
@@ -36,6 +37,8 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
   ): BaseColumnType[T] =
     MappedColumnType.base((pb: T) => pb.toByteArray, (bts: Array[Byte]) => companion.parseFrom(bts))
 
+  implicit val ec: ExecutionContext = ExecutionContext.parasitic
+
   class DefinitionIndexView(tag: Tag) extends Table[DefinitionIndexViewRow](tag, "definition_index_view") {
 
     // for debug only
@@ -46,7 +49,8 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     def ownerId: Rep[UUID] = column[UUID]("OWNER_ID")
 
     // coordinates/location inside akka-sharding
-    def bucketId: Rep[Long]   = column[Long]("BUCKET_ID")
+    def bucketId: Rep[Long] = column[Long]("BUCKET_ID")
+
     def sequenceNr: Rep[Long] = column[Long]("SEQ_NUM")
     // coordinates
 
@@ -54,7 +58,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
 
     def pk: slick.lifted.PrimaryKey = primaryKey("DIV__PK", (bucketId, sequenceNr))
 
-    def ownerIdIndex: slick.lifted.Index = index("DIV__OWNER_ID_IND", ownerId)
+    def ownerIdIndex: slick.lifted.Index = index("DEF_IND_VIEW__OWNER_ID_IND", ownerId)
 
     def * : slick.lifted.ProvenShape[DefinitionIndexViewRow] =
       (name, definition, ownerId, bucketId, sequenceNr, when) <>
@@ -64,8 +68,6 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
   object definitionIndexView extends TableQuery(new DefinitionIndexView(_)) {
     self =>
 
-    implicit val ec: scala.concurrent.ExecutionContext = ExecutionContext.parasitic
-
     val locationDefinition = Compiled { (ownerId: Rep[UUID]) =>
       self.filter(_.ownerId === ownerId).map(rep => (rep.bucketId, rep.sequenceNr, rep.definition))
     }
@@ -73,10 +75,21 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     def getLocationDefinition(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long, Definition)]] =
       db.run(locationDefinition(ownerId).result)
 
-    def update(row: DefinitionIndexViewRow): Future[Done] =
-      db.run(definitionIndexView.insertOrUpdate(row)).map(_ => Done)(ExecutionContext.parasitic)
+    /*def update(row: DefinitionIndexViewRow): Future[Done] =
+      db.run(
+        (definitionIndexView.insertOrUpdate(row) >>
+          temporalConstraints.filter(_.ownerId === row.ownerId).delete).transactionally
+      ).map(_ => Done)*/
 
-    def conditionalCreate(row: DefinitionIndexViewRow): Future[Boolean] = {
+    // https://github.com/haghard/unique-definition-management/blob/main/src/main/scala/com/definition/Guardian.scala
+    def createAndUnlock(row: DefinitionIndexViewRow): Future[Done] = {
+      val insertNew = definitionIndexView.insertOrUpdate(row)
+      val unlock    = temporalConstraints.filter(_.ownerId === row.ownerId).delete
+      val dbio      = (insertNew >> unlock).transactionally
+      db.run(dbio).map(_ => Done)
+    }
+
+    /*def conditionalCreate(row: DefinitionIndexViewRow): Future[Boolean] = {
       val dbio =
         definitionIndexView
           .filter(_.ownerId === row.ownerId)
@@ -91,23 +104,238 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
               else
                 DBIO.successful(false)
             case None =>
-              definitionIndexView.insertOrUpdate(row).map(_ => true)
+              (definitionIndexView.insertOrUpdate(row) >>
+                temporalConstraints.filter(_.ownerId === row.ownerId).delete)
+                .map(_ => true)
           }
           .transactionally
 
       db.run(dbio)
-    }
+    }*/
 
-    def releaseFailed(entityId: Long, seqNum: Long): Future[Done] =
-      db.run(DBIO.from(Future.failed(new Exception(s"Boom($entityId,$seqNum) !!!"))))
-
-    def release(bucketId: Long, seqNum: Long): Future[Done] =
+    /*def release(ownerId: UUID, bucketId: Long, seqNum: Long): Future[Done] =
       db
-        .run(definitionIndexView.filter(rep => rep.bucketId === bucketId && rep.sequenceNr === seqNum).delete)
-        .map(_ => Done)
+        .run(
+          definitionIndexView.filter(rep => rep.bucketId === bucketId && rep.sequenceNr === seqNum).delete
+          //temporalConstraints.filter(_.ownerId === ownerId).delete).transactionally
+        )
+        .map(_ => Done)*/
+
+    def replaceAndUnlock(row: DefinitionIndexViewRow, bucketId: Long, seqNum: Long): Future[Done] = {
+      val insertNew = definitionIndexView.insertOrUpdate(row)
+      val deleteOld = definitionIndexView
+        .filter(rep => rep.ownerId === row.ownerId && rep.bucketId === bucketId && rep.sequenceNr === seqNum)
+        .delete
+      val unlock = temporalConstraints.filter(_.ownerId === row.ownerId).delete
+      val dbio   = (deleteOld >> insertNew >> unlock).transactionally
+      db.run(dbio).map(_ => Done)
+    }
   }
 
-  val tables           = Seq(definitionIndexView)
+  final case class TemporalConstraintRow(ownerId: UUID, when: Long)
+
+  class TemporalConstraints(tag: Tag) extends Table[TemporalConstraintRow](tag, "temporal_constraints") {
+
+    def ownerId: Rep[UUID] = column[UUID]("OWNER_ID")
+
+    def when: Rep[Long] = column[Long]("WHEN")
+
+    def pk: slick.lifted.PrimaryKey = primaryKey("tc_OWNER_ID__PK", ownerId)
+
+    def * : slick.lifted.ProvenShape[TemporalConstraintRow] =
+      (ownerId, when) <>
+        ((TemporalConstraintRow.apply _).tupled, TemporalConstraintRow.unapply)
+  }
+
+  object temporalConstraints extends TableQuery(new TemporalConstraints(_))
+
+  sealed trait CreateResult
+
+  object CreateResult {
+    case object Locked extends CreateResult
+
+    case object Conflict extends CreateResult
+
+    case class IllegalState(entityId: Long, seqNum: Long) extends CreateResult
+
+    case class AnotherDefinitionFound(entityId: Long, seqNum: Long) extends CreateResult
+
+    case object NRowsFound extends CreateResult
+  }
+
+  def withCreateLock(
+    in: PutRequest
+  )(ask: PutRequest => Future[PutReply])(implicit ec: ExecutionContext): Future[PutReply] = {
+    val ownerId = UUID.fromString(in.ownerId)
+
+    val dbio =
+      definitionIndexView
+        .locationDefinition(ownerId)
+        .result
+        .flatMap { rows =>
+          rows.size match {
+            case 0 =>
+              (temporalConstraints += TemporalConstraintRow(ownerId, System.nanoTime())).asTry.map {
+                case Success(_) =>
+                  CreateResult.Locked
+                case Failure(_) =>
+                  CreateResult.Conflict
+              }
+            case 1 =>
+              val (entityId, seqNum, definition) = rows.head
+              if (definition == in.definition) {
+                DBIO.successful(CreateResult.IllegalState(entityId, seqNum))
+              } else {
+                DBIO.successful(CreateResult.AnotherDefinitionFound(entityId, seqNum))
+              }
+            case _ =>
+              DBIO.successful(CreateResult.NRowsFound)
+          }
+        }
+        .transactionally
+
+    db.run(dbio)
+      .flatMap {
+        case CreateResult.Locked =>
+          // TODO: 1) Not atomic - add retry 2) Expire locks
+          ask(in)
+        case CreateResult.Conflict =>
+          Future.successful(
+            PutReply(
+              in.ownerId,
+              PutReply.StatusCode.CreateConflict,
+              DefinitionLocation(-1, -1)
+            )
+          )
+        case CreateResult.IllegalState(entityId, seqNum) =>
+          Future.successful(
+            PutReply(
+              in.ownerId,
+              PutReply.StatusCode.IllegalState,
+              DefinitionLocation(entityId, seqNum)
+            )
+          )
+        case CreateResult.AnotherDefinitionFound(entityId, seqNum) =>
+          Future.successful(
+            PutReply(
+              in.ownerId,
+              PutReply.StatusCode.AnotherDefinitionFound,
+              DefinitionLocation(entityId, seqNum)
+            )
+          )
+        case CreateResult.NRowsFound =>
+          Future.successful(
+            PutReply(
+              in.ownerId,
+              PutReply.StatusCode.IllegalState,
+              DefinitionLocation(-1, -1)
+            )
+          )
+      }(ec)
+  }
+
+  sealed trait UpdateResult
+
+  object UpdateResult {
+    case class Locked(definitionLocation: DefinitionLocation) extends UpdateResult
+
+    case object Conflict extends UpdateResult
+
+    case object IllegalState extends UpdateResult
+
+    case class OK(definitionLocation: DefinitionLocation) extends UpdateResult
+
+    case object LocationNotFound extends UpdateResult
+
+    case object NotFound extends UpdateResult
+  }
+
+  def withUpdateLock(
+    in: PutRequest
+  )(ask: (PutRequest, DefinitionLocation) => Future[PutReply])(implicit ec: ExecutionContext): Future[PutReply] = {
+    val ownerId = UUID.fromString(in.ownerId)
+
+    val dbio =
+      definitionIndexView
+        .locationDefinition(ownerId)
+        .result
+        .flatMap { rows =>
+          rows.size match {
+            case 0 =>
+              DBIO.successful(UpdateResult.NotFound)
+            case 1 =>
+              // Use case: Same entity_id is used to create different definitions
+              val (bucketId, seqNum, definition) = rows.head
+              if (in.definition != definition) {
+                if (bucketId == in.getDefinitionLocation.bucketId && seqNum == in.getDefinitionLocation.seqNum) {
+                  (temporalConstraints += TemporalConstraintRow(ownerId, System.currentTimeMillis())).asTry.map {
+                    case Success(_) =>
+                      UpdateResult.Locked(DefinitionLocation(bucketId, seqNum))
+                    case Failure(_) =>
+                      UpdateResult.Conflict
+                  }
+                } else {
+                  DBIO.successful(UpdateResult.LocationNotFound)
+                }
+              } else {
+                DBIO.successful(UpdateResult.OK(DefinitionLocation(bucketId, seqNum)))
+              }
+            case _ =>
+              DBIO.successful(UpdateResult.IllegalState)
+          }
+        }
+        .transactionally
+
+    db.run(dbio)
+      .flatMap {
+        case UpdateResult.Locked(prevDefinitionLocation) =>
+          // TODO: Not atomic - add retry
+          ask(in, prevDefinitionLocation)
+        case UpdateResult.Conflict =>
+          Future.successful(
+            PutReply(
+              in.ownerId,
+              PutReply.StatusCode.UpdateConflict,
+              DefinitionLocation(-1, -1)
+            )
+          )
+        case UpdateResult.OK(definitionLocation) =>
+          Future.successful(
+            PutReply(
+              in.ownerId,
+              PutReply.StatusCode.OK2,
+              definitionLocation
+            )
+          )
+
+        case UpdateResult.LocationNotFound =>
+          Future.successful(
+            PutReply(
+              in.ownerId,
+              PutReply.StatusCode.LocationNotFound,
+              DefinitionLocation(-1, -1)
+            )
+          )
+        case UpdateResult.IllegalState =>
+          Future.successful(
+            PutReply(
+              in.ownerId,
+              PutReply.StatusCode.IllegalState,
+              DefinitionLocation(-1, -1)
+            )
+          )
+        case UpdateResult.NotFound =>
+          Future.successful(
+            PutReply(
+              in.ownerId,
+              PutReply.StatusCode.NotFound,
+              DefinitionLocation(-1, -1)
+            )
+          )
+      }(ec)
+  }
+
+  val tables           = Seq(definitionIndexView, temporalConstraints)
   val ddl: profile.DDL = tables.map(_.schema).reduce(_ ++ _)
 
   private val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
@@ -124,7 +352,15 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
 
   def createAllTables()(implicit sys: ActorSystem[_]): Future[Done] =
     db.run(ddl.createIfNotExists)
-      .flatMap(_ => SlickProjection.createTablesIfNotExists(dbConfig))(ExecutionContext.parasitic)
+      .flatMap(_ => SlickProjection.createTablesIfNotExists(dbConfig))
 }
 
 object Tables extends SlickTablesGeneric(slick.jdbc.MySQLProfile)
+
+/*
+akka.pattern.retry(
+    attempt = () => mkF(ownerId, definition),
+    attempts = 8,
+    delayFunction = { i => Option(75.millis) }
+)(system.executionContext, system.scheduler.toClassic)
+ */

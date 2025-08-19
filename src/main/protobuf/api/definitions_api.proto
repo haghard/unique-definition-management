@@ -42,7 +42,7 @@ message PutRequest {
 message PutReply {
   string owner_id = 1;
   StatusCode status_code = 2;
-  com.definition.domain.DefinitionLocation definition_location = 3;
+  com.definition.domain.DefinitionLocation definition_location = 3 [(scalapb.field).no_box = true];
 
   enum StatusCode {
     Undefined = 0;
@@ -54,5 +54,7 @@ message PutReply {
     LocationNotFound=6;
     AnotherDefinitionFound = 7;
     InvalidCausalToken=8;
+    CreateConflict=9;
+    UpdateConflict=10;
   }
 }

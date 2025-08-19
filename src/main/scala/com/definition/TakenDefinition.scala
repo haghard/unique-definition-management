@@ -34,10 +34,10 @@ object TakenDefinition {
             case Update(_, definition, _, _) =>
               val bts = ByteBuffer.wrap(definition.contentKey.getBytes(StandardCharsets.UTF_8))
               CassandraMurmurHash.hash2_64(bts, 0, bts.array.length, akka.util.HashCode.SEED).toString
-            case Release(_, prevDefinitionLocation, _, _) =>
+            case Replace(_, _, _, _, prevDefinitionLocation, _) =>
               prevDefinitionLocation.bucketId.toString
-            case Rollback(_, location, _) =>
-              location.bucketId.toString
+            /*case Release(_, prevDefinitionLocation, _, _) =>
+              prevDefinitionLocation.bucketId.toString*/
 
             case Passivate() =>
               throw new Exception(s"Unsupported Passivate()")
@@ -92,118 +92,90 @@ object TakenDefinition {
     def applyCmd(
       cmd: Cmd,
       entityId: Long
-    )(implicit ctx: ActorContext[Cmd], resolver: ActorRefResolver): ReplyEffect[Event, TakenDefinitionState] = {
-      val nextSeqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
+    )(implicit ctx: ActorContext[Cmd], resolver: ActorRefResolver): ReplyEffect[Event, TakenDefinitionState] =
       cmd match {
         case Create(ownerId, definition, replyTo) =>
           ctx.log.info(s"★★★> Create ${definition.name} to $ownerId")
-          Thread.sleep(3_000) // for local testing
-
-          val rollbackLocation = DefinitionLocation(entityId, nextSeqNum)
-          if (pbState.contentKeySeqNum.contains(definition.contentKey)) {
-            Effect
-              .none[Event, TakenDefinitionState]
-              .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
-                ctx.log.warn("Already reserved")
-                StatusReply.success(PutReply(ownerId, PutReply.StatusCode.Reserved, None))
-              }
-          } else {
-            Effect
-              .persist(Created(ownerId, definition, nextSeqNum, rollbackLocation))
-              .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
-                ctx.log.info(s"OwnerId:$ownerId acquired ${definition.name}")
-                StatusReply.success(
-                  PutReply(
-                    ownerId,
-                    PutReply.StatusCode.OK,
-                    Some(DefinitionLocation(entityId, nextSeqNum))
+          // Thread.sleep(3_000) // for local testing
+          pbState.contentKeySeqNum.get(definition.contentKey) match {
+            case Some(seqNum) =>
+              Effect
+                .none[Event, TakenDefinitionState]
+                .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
+                  ctx.log.warn("Already reserved")
+                  StatusReply.success(
+                    PutReply(ownerId, PutReply.StatusCode.Reserved, DefinitionLocation(entityId, seqNum))
                   )
-                )
-              }
+                }
+            case None =>
+              val nextSeqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
+              Effect
+                .persist(Acquired(ownerId, definition, nextSeqNum, None))
+                .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
+                  ctx.log.info(s"OwnerId:$ownerId acquired ${definition.name}")
+                  StatusReply.success(
+                    PutReply(
+                      ownerId,
+                      PutReply.StatusCode.OK,
+                      DefinitionLocation(entityId, nextSeqNum)
+                    )
+                  )
+                }
           }
 
         case Update(ownerId, definition, prevDefinitionLocation, replyTo) =>
           ctx.log.info(s"★★★> Update ${definition.name}  OwnerId:$ownerId")
+          // Thread.sleep(3_000) // for local testing
 
-          if (pbState.contentKeySeqNum.contains(definition.contentKey)) {
-            Effect
-              .none[Event, TakenDefinitionState]
-              .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
-                ctx.log.warn("Already reserved")
-                StatusReply.success(
-                  PutReply(
-                    ownerId,
-                    PutReply.StatusCode.Reserved,
-                    None
+          pbState.contentKeySeqNum.get(definition.contentKey) match {
+            case Some(seqNum) =>
+              Effect
+                .none[Event, TakenDefinitionState]
+                .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
+                  ctx.log.warn("Already reserved")
+                  StatusReply.success(
+                    PutReply(
+                      ownerId,
+                      PutReply.StatusCode.Reserved,
+                      DefinitionLocation(entityId, seqNum)
+                    )
                   )
+                }
+            case None =>
+              val nextSeqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
+              Effect
+                .persist(
+                  Acquired(ownerId, definition, nextSeqNum, Some(prevDefinitionLocation))
                 )
-              }
-          } else {
-            val rollbackLocation = DefinitionLocation(entityId, nextSeqNum)
-            Effect
-              .persist(
-                Updated(
-                  ownerId,
-                  definition,
-                  nextSeqNum,
-                  // release
-                  prevDefinitionLocation,
-                  rollbackLocation
-                )
-                // UpdatedAndRelease
-                // Updated(ownerId, definition, nextSeqNum),
-                // ReleaseRequested(ownerId, prevDefinitionLocation, rollbackLocation)
-              )
-              .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
-                StatusReply.success(
-                  PutReply(
-                    ownerId,
-                    PutReply.StatusCode.OK,
-                    Some(rollbackLocation)
+                .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
+                  StatusReply.success(
+                    PutReply(
+                      ownerId,
+                      PutReply.StatusCode.OK,
+                      DefinitionLocation(entityId, nextSeqNum)
+                    )
                   )
-                )
-              }
+                }
           }
 
-        case Release(ownerId, prevDefinitionLocation, rollbackLocation, replyTo) =>
+        case Replace(ownerId, definition, seqNum0, bucketNum, prevDefinitionLocation, replyTo) =>
+          // maybe I don't need to put seqNum in contentKeySeqNum
           pbState.contentKeySeqNum.collectFirst {
             case (_, seqNum) if seqNum == prevDefinitionLocation.seqNum => seqNum
           } match {
-            case Some(_) =>
+            case Some(seqNum) =>
               Effect
-                .persist(Released(ownerId, prevDefinitionLocation))
+                .persist(Released(ownerId, prevDefinitionLocation, definition, bucketNum, seqNum0))
                 .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
-                  ctx.log.warn(s"Released($ownerId:${prevDefinitionLocation.seqNum})")
+                  ctx.log.warn(s"Released($ownerId:${seqNum})")
                   StatusReply.success(Done)
                 }
 
-            case None =>
-              Effect
-                .persist(RollbackRequested(ownerId, rollbackLocation))
-                .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
-                  ctx.log.warn(
-                    s"Update conflict detected for ${ownerId}. RollbackRequested($ownerId, $rollbackLocation)"
-                  )
-                  StatusReply.success(Done)
-                }
-          }
-
-        case Rollback(ownerId, rollbackLocation, replyTo) =>
-          pbState.contentKeySeqNum.collectFirst {
-            case (_, seqNum) if seqNum == rollbackLocation.seqNum => seqNum
-          } match {
-            case Some(_) =>
-              Effect
-                .persist(Released(ownerId, rollbackLocation))
-                .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
-                  ctx.log.warn(s"RollbackReleased($ownerId:${rollbackLocation.seqNum})")
-                  StatusReply.success(Done)
-                }
             case None =>
               Effect
                 .none[Event, TakenDefinitionState]
                 .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
-                  ctx.log.warn(s"Critical error: Failed to rollback $ownerId: $rollbackLocation")
+                  ctx.log.warn(s"Failed to release prev_payload for $ownerId: Not found")
                   StatusReply.success(Done)
                 }
           }
@@ -215,20 +187,15 @@ object TakenDefinition {
             .thenStop()
             .thenNoReply()
       }
-    }
 
     def applyEvt(event: Event)(implicit ctx: ActorContext[Cmd]): TakenDefinitionState =
       event match {
-        case Created(ownerId, definition, seqNum, _) =>
-          ctx.log.info("Created: {} by {}/{}", definition.name, ownerId, seqNum)
+        case Acquired(ownerId, definition, seqNum, _) =>
+          ctx.log.info("Acquired: {} by {}/{}", definition.name, ownerId, seqNum)
           // TODO: contentKeySeqNum - Use off-heap maps from one-nio
           val updatedIndex = pbState.contentKeySeqNum + (definition.contentKey -> seqNum)
           pbState.update(_.contentKeySeqNum := updatedIndex)
-        case Updated(ownerId, definition, seqNum, _, _) =>
-          ctx.log.info("Updated: {} by {}/{}", definition.name, ownerId, seqNum)
-          val updatedIndex = pbState.contentKeySeqNum + (definition.contentKey -> seqNum)
-          pbState.update(_.contentKeySeqNum := updatedIndex)
-        case Released(ownerId, prevDefinitionLocation) =>
+        case Released(ownerId, prevDefinitionLocation, _, _, _) =>
           val definitionContentKey =
             pbState.contentKeySeqNum
               .collectFirst {
@@ -240,10 +207,7 @@ object TakenDefinition {
           ctx.log.info("Released:{} by {}/{}", definitionContentKey, ownerId, prevDefinitionLocation.seqNum)
           val updatedIndex = pbState.contentKeySeqNum - definitionContentKey
           pbState.update(_.contentKeySeqNum := updatedIndex)
-          // case _: ReleaseRequested =>
-          pbState
-        case _: RollbackRequested =>
-          pbState
+
       }
   }
 }

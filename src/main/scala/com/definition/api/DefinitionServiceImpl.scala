@@ -11,7 +11,7 @@ import com.definition.domain.command.*
 import java.util.UUID
 
 final class DefinitionServiceImpl(
-  takenDefinition: ActorRef[Cmd]
+  takenDefinitions: ActorRef[Cmd]
 )(implicit system: ActorSystem[_])
     extends DefinitionService {
 
@@ -44,132 +44,43 @@ final class DefinitionServiceImpl(
       }
 
   def create(in: PutRequest) =
-    Tables.definitionIndexView
-      .getLocationDefinition(UUID.fromString(in.ownerId))
-      .flatMap { rows =>
-        rows.size match {
-          case 0 =>
-            // Use case: Same entity_id is used to create different definitions
-            // Concurrent modifications resolutions strategy = detect it on the read side and rollback losers
-            takenDefinition
-              .askWithStatus[PutReply] { askReplyTo =>
-                Create(
-                  in.ownerId,
-                  Definition(
-                    in.definition.name,
-                    in.definition.address,
-                    in.definition.city,
-                    in.definition.country,
-                    in.definition.state,
-                    in.definition.zipCode,
-                    in.definition.brand
-                  ),
-                  actorRefResolver.toSerializationFormat(askReplyTo)
-                )
-              }
-          case 1 =>
-            val (entityId, seqNum, definition) = rows.head
-            if (definition == in.definition) {
-              Future.successful(
-                PutReply(
-                  in.ownerId,
-                  PutReply.StatusCode.OK2,
-                  Some(DefinitionLocation(entityId, seqNum))
-                )
-              )
-            } else {
-              Future.successful(
-                PutReply(
-                  in.ownerId,
-                  PutReply.StatusCode.AnotherDefinitionFound,
-                  Some(DefinitionLocation(entityId, seqNum))
-                )
-              )
-            }
-          case _ =>
-            Future.successful(
-              PutReply(
-                in.ownerId,
-                PutReply.StatusCode.IllegalState,
-                Some(DefinitionLocation(-1, -1))
-              )
-            )
+    Tables.withCreateLock(in) { in =>
+      takenDefinitions
+        .askWithStatus[PutReply] { askReplyTo =>
+          Create(
+            in.ownerId,
+            Definition(
+              in.definition.name,
+              in.definition.address,
+              in.definition.city,
+              in.definition.country,
+              in.definition.state,
+              in.definition.zipCode,
+              in.definition.brand
+            ),
+            actorRefResolver.toSerializationFormat(askReplyTo)
+          )
         }
-      }
+    }(ec)
 
   def update(in: PutRequest) =
-    Tables.definitionIndexView
-      .getLocationDefinition(UUID.fromString(in.ownerId))
-      .flatMap { rows =>
-        rows.size match {
-          case 0 =>
-            Future.successful(
-              PutReply(
-                in.ownerId,
-                PutReply.StatusCode.NotFound,
-                Some(DefinitionLocation(-1, -1))
-              )
-            )
-          case 1 =>
-            // Use case: Same entity_id is used to create different definitions
-            // Concurrent modifications resolutions strategy = (detect it on the read side and losers)
-            val (bucketId, seqNum, definition) = rows.head
-            if (in.definition != definition) {
-              if (bucketId == in.getDefinitionLocation.bucketId && seqNum == in.getDefinitionLocation.seqNum) {
-                takenDefinition
-                  .askWithStatus[PutReply] { replyTo =>
-                    Update(
-                      in.ownerId,
-                      Definition(
-                        in.definition.name,
-                        in.definition.address,
-                        in.definition.city,
-                        in.definition.country,
-                        in.definition.state,
-                        in.definition.zipCode,
-                        in.definition.brand
-                      ),
-                      DefinitionLocation(bucketId, seqNum),
-                      actorRefResolver.toSerializationFormat(replyTo)
-                    )
-                  }
-              } else {
-                Future.successful(
-                  PutReply(
-                    in.ownerId,
-                    PutReply.StatusCode.LocationNotFound,
-                    Some(DefinitionLocation(-1, -1))
-                  )
-                )
-              }
-            } else {
-              Future.successful(
-                PutReply(
-                  in.ownerId,
-                  PutReply.StatusCode.OK2,
-                  Some(DefinitionLocation(bucketId, seqNum))
-                )
-              )
-            }
-
-          case n =>
-            // fix on read ???
-            Future.successful(
-              PutReply(
-                in.ownerId,
-                PutReply.StatusCode.IllegalState,
-                Some(DefinitionLocation(-1, -1))
-              )
-            )
+    Tables.withUpdateLock(in) { (in, prevDefinitionLocation) =>
+      takenDefinitions
+        .askWithStatus[PutReply] { replyTo =>
+          Update(
+            in.ownerId,
+            Definition(
+              in.definition.name,
+              in.definition.address,
+              in.definition.city,
+              in.definition.country,
+              in.definition.state,
+              in.definition.zipCode,
+              in.definition.brand
+            ),
+            prevDefinitionLocation,
+            actorRefResolver.toSerializationFormat(replyTo)
+          )
         }
-      }
+    }
 }
-
-/*
-akka.pattern.retry(
-    attempt = () => mkF(ownerId, definition),
-    attempts = 8,
-    delayFunction = { i => Option(75.millis) }
-)(system.executionContext, system.scheduler.toClassic)
-
- */

@@ -38,20 +38,19 @@ message Update {
   string replyTo = 5;
 }
 
-message Release {
+message Replace {
   option (scalapb.message).extends = "Cmd";
 
+  //create new
   string owner_id = 1;
-  DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
-  DefinitionLocation rollback_location = 3 [(scalapb.field).no_box = true];
-  string replyTo = 4;
-}
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  int64 acquired_seq_num = 3;
+  int64 bucket_id = 4;
 
-message Rollback {
-  option (scalapb.message).extends = "Cmd";
-  string owner_id = 1;
-  DefinitionLocation rollback_location = 2 [(scalapb.field).no_box = true];
-  string replyTo = 3;
+  //delete old
+  DefinitionLocation prev_definition_location = 5 [(scalapb.field).no_box = true];
+
+  string replyTo = 6;
 }
 
 message Passivate {
