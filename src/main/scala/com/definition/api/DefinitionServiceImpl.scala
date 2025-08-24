@@ -44,7 +44,7 @@ final class DefinitionServiceImpl(
       }
 
   def create(in: PutRequest) =
-    Tables.withCreateLock(in) { in =>
+    Tables.lockFreeCreate(in) { in =>
       takenDefinitions
         .askWithStatus[PutReply] { askReplyTo =>
           Create(
@@ -64,7 +64,7 @@ final class DefinitionServiceImpl(
     }(ec)
 
   def update(in: PutRequest) =
-    Tables.withUpdateLock(in) { (in, prevDefinitionLocation) =>
+    Tables.lockFreeUpdate(in) { (in, prevDefinitionLocation) =>
       takenDefinitions
         .askWithStatus[PutReply] { replyTo =>
           Update(
@@ -83,4 +83,25 @@ final class DefinitionServiceImpl(
           )
         }
     }
+
+  /*def update(in: PutRequest) =
+    Tables.withUpdateLock(in) { (in, prevDefinitionLocation) =>
+      takenDefinitions
+        .askWithStatus[PutReply] { replyTo =>
+          Update(
+            in.ownerId,
+            Definition(
+              in.definition.name,
+              in.definition.address,
+              in.definition.city,
+              in.definition.country,
+              in.definition.state,
+              in.definition.zipCode,
+              in.definition.brand
+            ),
+            prevDefinitionLocation,
+            actorRefResolver.toSerializationFormat(replyTo)
+          )
+        }
+    }*/
 }

@@ -41,13 +41,14 @@ message Update {
 message Replace {
   option (scalapb.message).extends = "Cmd";
 
-  //create new
+  // current
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
-  int64 acquired_seq_num = 3;
-  int64 bucket_id = 4;
 
-  //delete old
+  int64 acquired_seq_num = 3;
+  int64 acquired_bucket_id = 4;
+
+  // prev
   DefinitionLocation prev_definition_location = 5 [(scalapb.field).no_box = true];
 
   string replyTo = 6;

@@ -28,7 +28,7 @@ message Acquired {
   int64 seq_num = 3;
 
   //Release DefinitionLocation
-  DefinitionLocation prev_definition_location = 4; //None->Create|Some(_)-> Update
+  DefinitionLocation prev_definition_location = 4;
 }
 
 message Released {

@@ -6,6 +6,9 @@
 
 ✅ Ensure correctness in all scenarios. 
 
+✅ Clients are able to order their own operations and provide a globally unique ID (`owner_id`) for them.
+
+
 ### Optimize the write latency
 
 You usually can't have both low latency and ordering in Distributed Systems. 
@@ -65,7 +68,7 @@ http GET 127.0.0.2:8079/definitions/cluster/shards/tkn-dfn
 
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 grpcurl -d '{"definition":{"name":"ff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"3341739074684379528","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"aas13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"2906301794710397039","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"aas13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"6898668511187520942","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 grpcurl -d '{"definition":{"name":"ff6451324","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"3341739074684379528","seqNum":"3"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
@@ -109,4 +112,23 @@ grpcurl -d '{"definition":{"name":"zff13334","address":"a","city":"FL","state":"
 
 ```
 
-table TEMPORAL_CONSTRAIN TRX_WRITE_SET(trx_lock) owner_id, status=locked         (from=alice,to=bob,product_a) select_for_update 
+```
+TRUNCATE table akka_projection_management;
+TRUNCATE table akka_projection_offset_store;
+TRUNCATE table snapshot;
+TRUNCATE table event_tag;
+DELETE FROM event_journal;
+DROP TABLE definition_index_view;
+```
+
+
+table TEMPORAL_CONSTRAIN TRX_WRITE_SET(trx_lock) owner_id, status=locked         (from=alice,to=bob,product_a) select_for_update
+                                    
+
+### Links
+
+https://habr.com/ru/articles/940066/
+https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#eventsbyslices
+https://vladmihalcea.com/database-job-queue-skip-locked/
+https://habr.com/ru/articles/940066/
+https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html

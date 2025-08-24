@@ -36,9 +36,6 @@ object TakenDefinition {
               CassandraMurmurHash.hash2_64(bts, 0, bts.array.length, akka.util.HashCode.SEED).toString
             case Replace(_, _, _, _, prevDefinitionLocation, _) =>
               prevDefinitionLocation.bucketId.toString
-            /*case Release(_, prevDefinitionLocation, _, _) =>
-              prevDefinitionLocation.bucketId.toString*/
-
             case Passivate() =>
               throw new Exception(s"Unsupported Passivate()")
           }
@@ -125,7 +122,7 @@ object TakenDefinition {
 
         case Update(ownerId, definition, prevDefinitionLocation, replyTo) =>
           ctx.log.info(s"★★★> Update ${definition.name}  OwnerId:$ownerId")
-          // Thread.sleep(3_000) // for local testing
+          Thread.sleep(3_000) // for local testing
 
           pbState.contentKeySeqNum.get(definition.contentKey) match {
             case Some(seqNum) =>
@@ -158,14 +155,13 @@ object TakenDefinition {
                 }
           }
 
-        case Replace(ownerId, definition, seqNum0, bucketNum, prevDefinitionLocation, replyTo) =>
-          // maybe I don't need to put seqNum in contentKeySeqNum
+        case Replace(ownerId, definition, acquiredSeqNum, acquiredBucketId, prevDefinitionLocation, replyTo) =>
           pbState.contentKeySeqNum.collectFirst {
             case (_, seqNum) if seqNum == prevDefinitionLocation.seqNum => seqNum
           } match {
             case Some(seqNum) =>
               Effect
-                .persist(Released(ownerId, prevDefinitionLocation, definition, bucketNum, seqNum0))
+                .persist(Released(ownerId, prevDefinitionLocation, definition, acquiredSeqNum, acquiredBucketId))
                 .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
                   ctx.log.warn(s"Released($ownerId:${seqNum})")
                   StatusReply.success(Done)

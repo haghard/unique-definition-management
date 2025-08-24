@@ -72,12 +72,12 @@ object Guardian {
                   case Some(prevDefinitionLocation) =>
                     takenDefinitions.askWithStatus[Done](replyTo =>
                       com.definition.domain.command.Replace(
-                        a.ownerId,
-                        a.definition,
-                        env.persistenceId.toLong,
-                        a.seqNum,
-                        prevDefinitionLocation,
-                        resolver.toSerializationFormat(replyTo)
+                        ownerId = a.ownerId,
+                        definition = a.definition,
+                        acquiredSeqNum = a.seqNum,
+                        acquiredBucketId = env.persistenceId.toLong,
+                        prevDefinitionLocation = prevDefinitionLocation,
+                        replyTo = resolver.toSerializationFormat(replyTo)
                       )
                     )
 
@@ -95,7 +95,6 @@ object Guardian {
                 }
 
               case r: Released =>
-                // All changes appear atomically
                 val row =
                   DefinitionIndexViewRow(
                     name = r.definition.name,
@@ -105,11 +104,7 @@ object Guardian {
                     sequenceNr = r.acquiredSeqNum,
                     when = env.timestamp
                   )
-                Tables.definitionIndexView.replaceAndUnlock(
-                  row,
-                  r.prevDefinitionLocation.bucketId,
-                  r.prevDefinitionLocation.seqNum
-                )
+                Tables.definitionIndexView.updateAndUnlock(row)
 
             }
       )
