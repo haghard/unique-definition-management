@@ -115,8 +115,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
           .map(rep => (rep.bucketId, rep.sequenceNr, rep.definition, rep.name, rep.when, rep.isLocked))
           .update((row.bucketId, row.sequenceNr, row.definition, row.name, row.when, false))
 
-      val dbio = update.transactionally
-      db.run(dbio).map(_ => Done)
+      db.run(update).map(_ => Done)
     }
   }
 
@@ -249,7 +248,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
                     .filter(_.ownerId === ownerId)
                     .map(_.isLocked)
                     .update(true)
-                    //if it times out, current trans gets rolled back but state might change
+                    // if it times out, current trans gets rolled back but state might change
                     .flatMap(_ => DBIO.from(ask(in, DefinitionLocation(bucketId, seqNum))))
                   /*.flatMap(_ =>
                       DBIO.from(

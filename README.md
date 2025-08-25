@@ -122,7 +122,9 @@ DROP TABLE definition_index_view;
 ```
 
 
-TODO: At least once delivery instead of db locking 
+TODO:
+1) pekko.persistence.r2dbc.journal.publish-events = on
+2)At least once delivery instead of db locking 
                                     
 
 ### Links
