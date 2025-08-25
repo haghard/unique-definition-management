@@ -122,12 +122,11 @@ DROP TABLE definition_index_view;
 ```
 
 
-table TEMPORAL_CONSTRAIN TRX_WRITE_SET(trx_lock) owner_id, status=locked         (from=alice,to=bob,product_a) select_for_update
+TODO: At least once delivery instead of db locking 
                                     
 
 ### Links
 
-https://habr.com/ru/articles/940066/
 https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#eventsbyslices
 https://vladmihalcea.com/database-job-queue-skip-locked/
 https://habr.com/ru/articles/940066/

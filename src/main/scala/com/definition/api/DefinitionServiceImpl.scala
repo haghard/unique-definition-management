@@ -44,7 +44,7 @@ final class DefinitionServiceImpl(
       }
 
   def create(in: PutRequest) =
-    Tables.lockFreeCreate(in) { in =>
+    Tables.create(in) { in =>
       takenDefinitions
         .askWithStatus[PutReply] { askReplyTo =>
           Create(
@@ -64,7 +64,7 @@ final class DefinitionServiceImpl(
     }(ec)
 
   def update(in: PutRequest) =
-    Tables.lockFreeUpdate(in) { (in, prevDefinitionLocation) =>
+    Tables.withUpdateLock(in) { (in, prevDefinitionLocation) =>
       takenDefinitions
         .askWithStatus[PutReply] { replyTo =>
           Update(
@@ -85,7 +85,7 @@ final class DefinitionServiceImpl(
     }
 
   /*def update(in: PutRequest) =
-    Tables.withUpdateLock(in) { (in, prevDefinitionLocation) =>
+    Tables.lockFreeStatusUpdate(in) { (in, prevDefinitionLocation) =>
       takenDefinitions
         .askWithStatus[PutReply] { replyTo =>
           Update(

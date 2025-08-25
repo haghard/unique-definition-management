@@ -45,8 +45,8 @@ libraryDependencies ++= Seq(
   "org.slf4j"      % "slf4j-api"       %  "2.0.17",
 
   //transport = aeron-udp
-  "io.aeron" % "aeron-driver" % "1.45.1",
-  "io.aeron" % "aeron-client" % "1.45.1",
+  "io.aeron" % "aeron-driver" % "1.46.9", //1.47.0
+  "io.aeron" % "aeron-client" % "1.46.9",
 
   //"org.wvlet.airframe" %% "airframe-ulid" % "2025.1.14",
 
@@ -82,7 +82,7 @@ Compile / scalacOptions ++= Seq(
   "-Xmigration" //Emit migration warnings under -Xsource:3 as fatal warnings, not errors; -Xmigration disables fatality (#10439 by @som-snytt, #10511)
 )
 
-Compile / javacOptions ++= Seq("-Xlint:unchecked", "-Xlint:deprecation", "-parameters") // for Jackson
+Compile / javacOptions ++= Seq("-Xlint:unchecked", "-Xlint:deprecation", "-parameters")
 
 scalafmtOnCompile := true
 

@@ -56,5 +56,6 @@ message PutReply {
     InvalidCausalToken=8;
     CreateConflict=9;
     UpdateConflict=10;
+    UpdateFailure=11;
   }
 }

@@ -94,6 +94,7 @@ object TakenDefinition {
         case Create(ownerId, definition, replyTo) =>
           ctx.log.info(s"★★★> Create ${definition.name} to $ownerId")
           // Thread.sleep(3_000) // for local testing
+
           pbState.contentKeySeqNum.get(definition.contentKey) match {
             case Some(seqNum) =>
               Effect
@@ -122,7 +123,7 @@ object TakenDefinition {
 
         case Update(ownerId, definition, prevDefinitionLocation, replyTo) =>
           ctx.log.info(s"★★★> Update ${definition.name}  OwnerId:$ownerId")
-          Thread.sleep(3_000) // for local testing
+          // Thread.sleep(3_000) // for local testing
 
           pbState.contentKeySeqNum.get(definition.contentKey) match {
             case Some(seqNum) =>
