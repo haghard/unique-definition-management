@@ -24,6 +24,8 @@ final case class DefinitionIndexViewRow(
   when: Long
 )
 
+final case class TemporalConstraintRow(ownerId: UUID, when: Long)
+
 class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
 
   import profile.api._
@@ -118,8 +120,6 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
       db.run(update).map(_ => Done)
     }
   }
-
-  final case class TemporalConstraintRow(ownerId: UUID, when: Long)
 
   class TemporalConstraints(tag: Tag) extends Table[TemporalConstraintRow](tag, "temporal_constraints") {
 
@@ -289,7 +289,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
             err => PutReply(in.ownerId, PutReply.StatusCode.UpdateFailure, DefinitionLocation(-1, -1)),
             { r =>
               val latency = System.currentTimeMillis() - startTs
-              println(s"Tooks $latency ms")
+              println(s"Took $latency ms")
               r
             }
           )

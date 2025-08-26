@@ -13,6 +13,7 @@ import akka.cluster.typed.SelfUp
 import akka.cluster.*
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
+import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickProjection
 import akka.projection.{ProjectionBehavior, ProjectionId}
 import slick.basic.DatabaseConfig
@@ -58,14 +59,29 @@ object Guardian {
       .withGroup(groupAfterEnvelopes = 10, groupAfterDuration = 300.millis)
      */
 
+    /*
+    val numberOfSlice = numberOfTags
+    val sliceRanges   = EventSourcedProvider.sliceRanges(
+      system,
+      JdbcReadJournal.Identifier /*R2dbcReadJournal.Identifier*/,
+      numberOfSlice
+    )
+    val minSlice           = sliceRanges.head.min
+    val maxSlice           = sliceRanges.head.max
+    val entityType: String = TakenDefinition.TypeKey.name
+    val sp: SourceProvider[akka.persistence.query.Offset, akka.persistence.query.typed.EventEnvelope[Event]] =
+      EventSourcedProvider.eventsBySlices[Event](system, JdbcReadJournal.Identifier, entityType, minSlice, maxSlice)*/
+
+    val sp: SourceProvider[akka.persistence.query.Offset, akka.projection.eventsourced.EventEnvelope[Event]] =
+      EventSourcedProvider.eventsByTag[Event](system, JdbcReadJournal.Identifier, tag)
+
     SlickProjection
       .atLeastOnceAsync(
         ProjectionId(name, tag),
-        // EventSourcedProvider.eventsBySlices()
-        EventSourcedProvider.eventsByTag[Event](system, JdbcReadJournal.Identifier, tag),
+        sp,
         dbConfig,
         () =>
-          (env: akka.projection.eventsourced.EventEnvelope[Event]) =>
+          (env: akka.projection.eventsourced.EventEnvelope[Event]) => // akka.persistence.query.typed.EventEnvelope
             env.event match {
               case a: Acquired =>
                 a.prevDefinitionLocation match {

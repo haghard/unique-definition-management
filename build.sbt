@@ -6,6 +6,7 @@ val AkkaVersion = "2.6.21"
 val akkaMngVersion  = "1.1.4"
 val AkkaHttpVersion = "10.2.10"
 val typesafeConfigVersion = "1.4.2"
+val AkkaProjectionVersion = "1.2.5" //"1.3.0"
 
 lazy val java17Settings = Seq(
   "--add-opens",
@@ -35,6 +36,10 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-cluster-tools"           % AkkaVersion,
 
   "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+  
+  "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
+
+  "org.hdrhistogram" % "HdrHistogram" % "2.2.2",
 
   "com.typesafe.akka"             %% "akka-discovery"               % AkkaVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % akkaMngVersion,
@@ -79,7 +84,9 @@ Compile / scalacOptions ++= Seq(
   //"-release:14",
   "-Xlog-reflective-calls",
   "-Xlint",
-  "-Xmigration" //Emit migration warnings under -Xsource:3 as fatal warnings, not errors; -Xmigration disables fatality (#10439 by @som-snytt, #10511)
+  "-Xmigration", //Emit migration warnings under -Xsource:3 as fatal warnings, not errors; -Xmigration disables fatality (#10439 by @som-snytt, #10511)
+  "-Vimplicits", // makes the compiler print implicit resolution chains when no implicit value can be found
+  "-Ylog-classpath", //log classpath
 )
 
 Compile / javacOptions ++= Seq("-Xlint:unchecked", "-Xlint:deprecation", "-parameters")
