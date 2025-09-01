@@ -17,21 +17,16 @@ Each unique definition belongs to exactly one `owner_id` at any point in time - 
 
 It is a relative order invariant. Acquiring a new definition requires condition check, and then releasing its current definition which doesn't require any checks and cannot fail. 
 Causal ordering if enough to guarantee that we never violate it.
- 
-*****
-I-offender - operations that may break app level invariants when executed concurrently.
-
-Create(owner_id=1) <> Create(owner_id=1)
-Update(owner_id=1) Update(owner_id=1,)
-Concurrent: Create and Update that modify the same definition.
-
-
-*******
-
 
 ### Write path
- 1) One database RTT to transactionally read existing data by `owner_id` from `definition_index_view` and one insert into `temporal_constraints` as an attempt to guarantee a total order of create/update operations by `owner_id` 
+ 1) One database RTT to transactionally read existing data by `owner_id` from `definition_index_view` and one insert into `temporal_constraints` as an attempt to guarantee a total order of create operations by `owner_id` 
  2) One akka-sharding clustered RTT to perform `Conditional Put` 
+
+
+### Implementation details
+To support 2-dimensional locking (firstly, we need to lock by `owner_id`; secondly, by `definition`) we use a combination of 2 techniques:
+a) explicit locking techniques such as `SELECT FOR UPDATE` on the database level.
+b) akka's atomic and lock-free read-modify-write operation.
 
 
 ```
@@ -67,16 +62,21 @@ http GET 127.0.0.2:8079/definitions/cluster/shards/tkn-dfn
 
 
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"3341739074684379528","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"aas13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"6898668511187520942","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"3341739074684379528","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"aas13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"6898668511187520942","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"aas13335","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"2906301794710397039","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"aas13336","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"5481507287789486185","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"aas13336","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"5481507287789486185","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff6451324","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"3341739074684379528","seqNum":"3"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff6451324","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"3341739074684379528","seqNum":"3"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff6451325","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"4875145662544880660","seqNum":"1"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff6451326","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"6031681633450188570","seqNum":"1"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"322367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
-grpcurl -d '{"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/getDefinitionLocation
+grpcurl -d '{"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/GetCurrentValue
 
 ```
 
@@ -120,16 +120,3 @@ TRUNCATE table event_tag;
 DELETE FROM event_journal;
 DROP TABLE definition_index_view;
 ```
-
-
-TODO:
-1) pekko.persistence.r2dbc.journal.publish-events = on
-2)At least once delivery instead of db locking 
-                                    
-
-### Links
-
-https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#eventsbyslices
-https://vladmihalcea.com/database-job-queue-skip-locked/
-https://habr.com/ru/articles/940066/
-https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html

@@ -21,7 +21,7 @@ option (scalapb.options) = {
 
 service DefinitionService {
   rpc ConditionalPut(PutRequest) returns (PutReply) {}
-  rpc GetDefinitionLocation(GetDefinitionLocationRequest) returns (GetDefinitionLocationReply) {}
+  rpc GetCurrentValue(GetDefinitionLocationRequest) returns (GetDefinitionLocationReply) {}
 }
 
 message GetDefinitionLocationRequest {
@@ -29,14 +29,14 @@ message GetDefinitionLocationRequest {
 }
 
 message GetDefinitionLocationReply {
-  com.definition.domain.DefinitionLocation prev_definition_location = 1; //causal_token
+  com.definition.domain.DefinitionLocation location = 1; //causal token
   com.definition.domain.Definition definition = 2;
 }
 
 message PutRequest {
   string owner_id = 1;
   com.definition.domain.Definition definition = 2 [(scalapb.field).no_box = true];
-  com.definition.domain.DefinitionLocation definition_location = 3; //acts as causal_token
+  com.definition.domain.DefinitionLocation location = 3; //acts as a causal token
 }
 
 message PutReply {

@@ -28,7 +28,7 @@ import java.util.UUID
 
 object Guardian {
 
-  implicit val askTo: akka.util.Timeout = akka.util.Timeout(5.seconds)
+  implicit val askTo: akka.util.Timeout = akka.util.Timeout(4.seconds)
 
   sealed trait Protocol
 
@@ -107,7 +107,7 @@ object Guardian {
                         sequenceNr = a.seqNum,
                         when = env.timestamp
                       )
-                    Tables.definitionIndexView.createAndUnlock(row)
+                    RelationalData.definitionIndexView.createAndUnlock(row)
                 }
 
               case r: Released =>
@@ -120,7 +120,7 @@ object Guardian {
                     sequenceNr = r.acquiredSeqNum,
                     when = env.timestamp
                   )
-                Tables.definitionIndexView.updateAndUnlock(row)
+                RelationalData.definitionIndexView.updateAndUnlock(row)
 
             }
       )
@@ -184,8 +184,7 @@ object Guardian {
                   .shardingStateChanges(ddataShardReplicator, cluster.selfMember.address.host.getOrElse("local"))
               }(system.executionContext)
 
-            Tables.createAllTables()
-
+            RelationalData.createAllTables()
             initProjections(takenDefinition)
             Bootstrap(takenDefinition, selfAddress.host.get, grpcPort)(ctx.system)
             Behaviors.same

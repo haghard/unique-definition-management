@@ -50,7 +50,7 @@ libraryDependencies ++= Seq(
   "org.slf4j"      % "slf4j-api"       %  "2.0.17",
 
   //transport = aeron-udp
-  "io.aeron" % "aeron-driver" % "1.46.9", //1.47.0
+  "io.aeron" % "aeron-driver" % "1.46.9",
   "io.aeron" % "aeron-client" % "1.46.9",
 
   //"org.wvlet.airframe" %% "airframe-ulid" % "2025.1.14",

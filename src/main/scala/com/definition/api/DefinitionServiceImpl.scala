@@ -15,23 +15,24 @@ final class DefinitionServiceImpl(
 )(implicit system: ActorSystem[_])
     extends DefinitionService {
 
-  val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
-
   implicit val sch: Scheduler                = system.scheduler
   implicit val askTimeout: akka.util.Timeout = Guardian.askTo
   implicit val ec: ExecutionContext          = system.executionContext
 
+  val lockMaxDuration: Long              = (Guardian.askTo.duration.toMillis * 2) + 2000
+  val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
+
   override def conditionalPut(in: PutRequest): Future[PutReply] =
-    in.definitionLocation match {
+    in.location match {
       case None =>
         create(in)
       case Some(_) =>
         update(in)
     }
 
-  override def getDefinitionLocation(in: GetDefinitionLocationRequest): Future[GetDefinitionLocationReply] =
-    Tables.definitionIndexView
-      .getLocationDefinition(UUID.fromString(in.ownerId))
+  override def getCurrentValue(in: GetDefinitionLocationRequest): Future[GetDefinitionLocationReply] =
+    RelationalData.definitionIndexView
+      .getCurrentLocation(UUID.fromString(in.ownerId))
       .map { rows =>
         rows.size match {
           case 0 => GetDefinitionLocationReply(None, None)
@@ -44,7 +45,7 @@ final class DefinitionServiceImpl(
       }
 
   def create(in: PutRequest) =
-    Tables.create(in) { in =>
+    RelationalData.create(in, lockMaxDuration) { in =>
       takenDefinitions
         .askWithStatus[PutReply] { askReplyTo =>
           Create(
@@ -64,7 +65,7 @@ final class DefinitionServiceImpl(
     }(ec)
 
   def update(in: PutRequest) =
-    Tables.withUpdateLock(in) { (in, prevDefinitionLocation) =>
+    RelationalData.update(in, lockMaxDuration) { (in, prevDefinitionLocation) =>
       takenDefinitions
         .askWithStatus[PutReply] { replyTo =>
           Update(
@@ -83,25 +84,4 @@ final class DefinitionServiceImpl(
           )
         }
     }
-
-  /*def update(in: PutRequest) =
-    Tables.lockFreeStatusUpdate(in) { (in, prevDefinitionLocation) =>
-      takenDefinitions
-        .askWithStatus[PutReply] { replyTo =>
-          Update(
-            in.ownerId,
-            Definition(
-              in.definition.name,
-              in.definition.address,
-              in.definition.city,
-              in.definition.country,
-              in.definition.state,
-              in.definition.zipCode,
-              in.definition.brand
-            ),
-            prevDefinitionLocation,
-            actorRefResolver.toSerializationFormat(replyTo)
-          )
-        }
-    }*/
 }
