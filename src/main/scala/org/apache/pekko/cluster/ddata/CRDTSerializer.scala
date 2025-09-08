@@ -1,11 +1,12 @@
-package akka.cluster.ddata
+package org.apache.pekko.cluster.ddata
 
-import akka.actor.ExtendedActorSystem
-import akka.cluster.ddata.protobuf.ReplicatedDataSerializer
+import org.apache.pekko.actor.ExtendedActorSystem
+import org.apache.pekko.cluster.ddata.ORSet
+import org.apache.pekko.cluster.ddata.protobuf.ReplicatedDataSerializer
 
 final class CRDTSerializer(system: ExtendedActorSystem)
     extends ReplicatedDataSerializer(system)
-    with akka.cluster.ddata.protobuf.SerializationSupport
+    with org.apache.pekko.cluster.ddata.protobuf.SerializationSupport
     with ProtocDDataSupport {
 
   override def manifest(obj: AnyRef): String =
@@ -13,10 +14,10 @@ final class CRDTSerializer(system: ExtendedActorSystem)
 
   override def toBinary(obj: AnyRef): Array[Byte] =
     obj match {
-      case reg: akka.cluster.ddata.LWWRegister[_] @unchecked =>
+      case reg: org.apache.pekko.cluster.ddata.LWWRegister[_] @unchecked =>
         reg.value match {
           // State from akka.cluster.sharding.DDataShardCoordinator
-          case state: akka.cluster.sharding.ShardCoordinator.Internal.State =>
+          case state: org.apache.pekko.cluster.sharding.ShardCoordinator.Internal.State =>
             system.log.warning("Shards online: {} ", state.shards.keySet.size)
           case _ =>
         }

@@ -1,13 +1,13 @@
 package com.definition
 
-import akka.Done
-import akka.actor.typed.*
-import akka.actor.typed.scaladsl.*
-import akka.cluster.sharding.typed.ShardingMessageExtractor
-import akka.cluster.sharding.typed.scaladsl.*
-import akka.pattern.StatusReply
-import akka.persistence.typed.*
-import akka.persistence.typed.scaladsl.*
+import org.apache.pekko.Done
+import org.apache.pekko.actor.typed.*
+import org.apache.pekko.actor.typed.scaladsl.*
+import org.apache.pekko.cluster.sharding.typed.ShardingMessageExtractor
+import org.apache.pekko.cluster.sharding.typed.scaladsl.*
+import org.apache.pekko.pattern.StatusReply
+import org.apache.pekko.persistence.typed.*
+import org.apache.pekko.persistence.typed.scaladsl.*
 
 import scala.concurrent.duration.DurationInt
 import com.definition.domain.*
@@ -30,10 +30,10 @@ object TakenDefinition {
           cmd match {
             case Create(_, definition, _) =>
               val bts = ByteBuffer.wrap(definition.contentKey.getBytes(StandardCharsets.UTF_8))
-              CassandraMurmurHash.hash2_64(bts, 0, bts.array.length, akka.util.HashCode.SEED).toString
+              CassandraMurmurHash.hash2_64(bts, 0, bts.array.length, org.apache.pekko.util.HashCode.SEED).toString
             case Update(_, definition, _, _) =>
               val bts = ByteBuffer.wrap(definition.contentKey.getBytes(StandardCharsets.UTF_8))
-              CassandraMurmurHash.hash2_64(bts, 0, bts.array.length, akka.util.HashCode.SEED).toString
+              CassandraMurmurHash.hash2_64(bts, 0, bts.array.length, org.apache.pekko.util.HashCode.SEED).toString
             case Replace(_, _, _, _, prevDefinitionLocation, _) =>
               prevDefinitionLocation.bucketId.toString
             case Passivate() =>
@@ -61,7 +61,8 @@ object TakenDefinition {
           (state, cmd) => state.applyCmd(cmd, entityId),
           (state, event) => state.applyEvt(event)
         )
-        .withTagger(_ => Set(math.abs(entityId % Guardian.numberOfTags).toString))
+        .withEventPublishing(true)
+        // .withTagger(_ => Set(math.abs(entityId % Guardian.numberOfTags).toString))
         .snapshotWhen { case (_, _, sequenceNr) =>
           val ifSnap = sequenceNr % snapshotEveryNEvents == 0
           if (ifSnap)

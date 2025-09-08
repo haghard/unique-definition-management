@@ -1,15 +1,14 @@
-package akka
-package cluster
+package org.apache.pekko.cluster
 
-import akka.actor.ActorRef
-import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.adapter.TypedActorRefOps
-import akka.cluster.ddata.{LWWRegister, LWWRegisterKey, Replicator}
-import akka.cluster.sharding.ShardCoordinator
-import akka.cluster.sharding.ShardCoordinator.ShardAllocationStrategy
-import akka.stream.{ActorAttributes, CompletionStrategy, KillSwitch, KillSwitches, OverflowStrategy, Supervision}
-import akka.stream.scaladsl.{Flow, Keep, Sink}
-import akka.stream.typed.scaladsl.ActorSource
+import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.actor.typed.ActorSystem
+import org.apache.pekko.actor.typed.scaladsl.adapter.TypedActorRefOps
+import org.apache.pekko.cluster.ddata.{LWWRegister, LWWRegisterKey, Replicator}
+import org.apache.pekko.cluster.sharding.ShardCoordinator
+import org.apache.pekko.cluster.sharding.ShardCoordinator.ShardAllocationStrategy
+import org.apache.pekko.stream.{ActorAttributes, CompletionStrategy, KillSwitch, KillSwitches, OverflowStrategy, Supervision}
+import org.apache.pekko.stream.scaladsl.{Flow, Keep, Sink}
+import org.apache.pekko.stream.typed.scaladsl.ActorSource
 import com.definition.TakenDefinition
 
 import scala.util.control.NonFatal
@@ -17,10 +16,10 @@ import scala.util.control.NonFatal
 object utils {
 
   def newLeastShardAllocationStrategy() = {
-    val leastShardAllocationNew: akka.cluster.sharding.internal.LeastShardAllocationStrategy =
+    val leastShardAllocationNew: org.apache.pekko.cluster.sharding.internal.LeastShardAllocationStrategy =
       ShardAllocationStrategy
         .leastShardAllocationStrategy(3, 1)
-        .asInstanceOf[akka.cluster.sharding.internal.LeastShardAllocationStrategy]
+        .asInstanceOf[org.apache.pekko.cluster.sharding.internal.LeastShardAllocationStrategy]
     leastShardAllocationNew
   }
 
@@ -35,7 +34,7 @@ object utils {
         .watch(ddataShardReplicator)
         .buffer(1, OverflowStrategy.backpressure)
 
-    type ShardCoordinatorState = LWWRegister[akka.cluster.sharding.ShardCoordinator.Internal.State]
+    type ShardCoordinatorState = LWWRegister[org.apache.pekko.cluster.sharding.ShardCoordinator.Internal.State]
     val (actorSource, src) =
       ActorSource
         .actorRef[Replicator.SubscribeResponse[ShardCoordinatorState]](
@@ -75,7 +74,7 @@ object utils {
       .to(Sink.foreach(stateLine => sys.log.warn(stateLine)))
       .withAttributes(
         ActorAttributes.supervisionStrategy {
-          case ex: akka.stream.WatchedActorTerminatedException =>
+          case ex: org.apache.pekko.stream.WatchedActorTerminatedException =>
             sys.log.error("Replicator failed. Terminate stream", ex)
             Supervision.Stop
           case NonFatal(ex) =>

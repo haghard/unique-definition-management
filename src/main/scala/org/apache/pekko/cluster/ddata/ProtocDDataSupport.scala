@@ -1,14 +1,14 @@
-package akka.cluster.ddata
+package org.apache.pekko.cluster.ddata
 
-import akka.actor.{ActorRef, Address}
-import akka.cluster.{Member, UniqueAddress}
-import akka.cluster.ddata.Replicator.Internal.*
-import akka.cluster.ddata.protobuf.SerializationSupport
-import akka.cluster.ddata.protobuf.msg.ReplicatorMessages as dm
-import akka.cluster.sharding.ShardCoordinator.Internal.{ShardHome, ShardHomeAllocated, ShardHomes, State}
-import akka.remote.ByteStringUtils
-import akka.serialization.Serialization
-import akka.util.ByteString as AkkaByteString
+import org.apache.pekko.actor.{ActorRef, Address}
+import org.apache.pekko.cluster.{Member, UniqueAddress}
+import org.apache.pekko.cluster.ddata.Replicator.Internal.*
+import org.apache.pekko.cluster.ddata.protobuf.SerializationSupport
+import org.apache.pekko.cluster.ddata.protobuf.msg.ReplicatorMessages as dm
+import org.apache.pekko.cluster.sharding.ShardCoordinator.Internal.{ShardHome, ShardHomeAllocated, ShardHomes, State}
+import org.apache.pekko.remote.ByteStringUtils
+import org.apache.pekko.serialization.Serialization
+import org.apache.pekko.util.ByteString as AkkaByteString
 
 import java.nio.ByteBuffer
 import scala.collection.immutable
@@ -148,9 +148,9 @@ trait ProtocDDataSupport extends SerializationSupport {
 
   def pruningToProto(
     entries: Map[UniqueAddress, PruningState]
-  ): Iterable[akka.cluster.ddata.protobuf.msg.ReplicatorMessages.DataEnvelope.PruningEntry] =
+  ): Iterable[org.apache.pekko.cluster.ddata.protobuf.msg.ReplicatorMessages.DataEnvelope.PruningEntry] =
     entries.map { case (removedAddress, state) =>
-      val b = akka.cluster.ddata.protobuf.msg.ReplicatorMessages.DataEnvelope.PruningEntry
+      val b = org.apache.pekko.cluster.ddata.protobuf.msg.ReplicatorMessages.DataEnvelope.PruningEntry
         .newBuilder()
         .setRemovedAddress(uniqueAddressToProto(removedAddress))
       state match {
@@ -220,7 +220,7 @@ trait ProtocDDataSupport extends SerializationSupport {
     b.build()
   }
 
-  import akka.cluster.sharding.protobuf.msg.ClusterShardingMessages as sm
+  import org.apache.pekko.cluster.sharding.protobuf.msg.ClusterShardingMessages as sm
   def coordinatorStateFromProto(state: sm.CoordinatorState): State = {
     val shards: Map[String, ActorRef] =
       state.getShardsList.asScala.toVector.iterator.map { entry =>

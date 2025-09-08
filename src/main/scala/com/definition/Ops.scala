@@ -38,10 +38,10 @@ trait Ops {
   }
 
   def hostNameConfig(hostName: String) =
-    ConfigFactory.parseString(s"akka.remote.artery.canonical.hostname = $hostName")
+    ConfigFactory.parseString(s"pekko.remote.artery.canonical.hostname = $hostName")
 
   def portConfig(port: Int) =
-    ConfigFactory.parseString(s"akka.remote.artery.canonical.port = $port")
+    ConfigFactory.parseString(s"pekko.remote.artery.canonical.port = $port")
 
   def readFile(path: String): Try[String] =
     Try(Source.fromFile(path)).map { src =>

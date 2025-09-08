@@ -1,9 +1,9 @@
-package akka.cluster.ddata
+package org.apache.pekko.cluster.ddata
 
-import akka.actor.ExtendedActorSystem
-import akka.cluster.ddata.protobuf.{ReplicatorMessageSerializer, SerializationSupport}
-import akka.protobufv3.internal.CodedOutputStream
-import akka.serialization.ByteBufferSerializer
+import org.apache.pekko.actor.ExtendedActorSystem
+import org.apache.pekko.cluster.ddata.protobuf.{ReplicatorMessageSerializer, SerializationSupport}
+import org.apache.pekko.protobufv3.internal.CodedOutputStream
+import org.apache.pekko.serialization.ByteBufferSerializer
 
 import java.nio.ByteBuffer
 import scala.util.Using
@@ -29,7 +29,7 @@ final class CustomReplicatorMessageSerializerUdp(system: ExtendedActorSystem)
   // 12
   // override val identifier: Int = super.identifier
 
-  private val writeAck = akka.cluster.ddata.protobuf.msg.ReplicatorMessages.Empty.getDefaultInstance
+  private val writeAck = org.apache.pekko.cluster.ddata.protobuf.msg.ReplicatorMessages.Empty.getDefaultInstance
   private val empty    = writeAck.toByteArray
 
   // override def toBinary(obj: AnyRef): Array[Byte] = super.toBinary(obj)
@@ -48,7 +48,7 @@ final class CustomReplicatorMessageSerializerUdp(system: ExtendedActorSystem)
   // instead of being forced to allocate and return an Array[Byte] for each serialized message.
   override def toBinary(replicatorMsg: AnyRef, directByteBuffer: ByteBuffer): Unit =
     replicatorMsg match {
-      case g: akka.cluster.ddata.Replicator.Internal.Gossip =>
+      case g: org.apache.pekko.cluster.ddata.Replicator.Internal.Gossip =>
         val protoGossip = gossipToProto(g)
         val allKeys     = g.updatedData.keySet
 
@@ -62,7 +62,7 @@ final class CustomReplicatorMessageSerializerUdp(system: ExtendedActorSystem)
         Using.resource(CodedOutputStream.newInstance(directByteBuffer))(protoGossip.writeTo(_))
       // Using.resource(new ByteBufferOutputStream(directByteBuffer))(out ⇒ protoGossip.writeTo(out))
 
-      case s: akka.cluster.ddata.Replicator.Internal.Status =>
+      case s: org.apache.pekko.cluster.ddata.Replicator.Internal.Status =>
         val protoStatus = statusToProto(s)
         system.log.warning(
           // "ToBinary: Status size {}. EntriesCount: {}. Direct: {}",
@@ -76,23 +76,23 @@ final class CustomReplicatorMessageSerializerUdp(system: ExtendedActorSystem)
         // Using.resource(new ByteBufferOutputStream(directByteBuffer))(protoStatus.writeTo(_))
         Using.resource(CodedOutputStream.newInstance(directByteBuffer))(protoStatus.writeTo(_))
 
-      case rr: akka.cluster.ddata.Replicator.Internal.ReadResult =>
+      case rr: org.apache.pekko.cluster.ddata.Replicator.Internal.ReadResult =>
         val readResultProto = readResultToProto(rr)
         // Using.resource(new ByteBufferOutputStream(directByteBuffer))(readResultProto.writeTo(_))
         Using.resource(CodedOutputStream.newInstance(directByteBuffer))(readResultProto.writeTo(_))
 
-      case w: akka.cluster.ddata.Replicator.Internal.Write =>
+      case w: org.apache.pekko.cluster.ddata.Replicator.Internal.Write =>
         val wp = writeToProto(w)
         Using.resource(CodedOutputStream.newInstance(directByteBuffer))(wp.writeTo(_))
 
-      case akka.cluster.ddata.Replicator.Internal.WriteAck =>
+      case org.apache.pekko.cluster.ddata.Replicator.Internal.WriteAck =>
         // Using.resource(new ByteBufferOutputStream(directByteBuffer))(out ⇒ writeAck.writeTo(out))
         directByteBuffer.get(empty)
 
-      case akka.cluster.ddata.Replicator.Internal.WriteNack =>
+      case org.apache.pekko.cluster.ddata.Replicator.Internal.WriteNack =>
         directByteBuffer.get(empty)
 
-      case akka.cluster.ddata.Replicator.Internal.DeltaNack =>
+      case org.apache.pekko.cluster.ddata.Replicator.Internal.DeltaNack =>
         directByteBuffer.get(empty)
 
       case _ =>
@@ -124,7 +124,7 @@ final class CustomReplicatorMessageSerializerUdp(system: ExtendedActorSystem)
         readResultFromBinary(directByteBuffer)
 
       case WriteAckManifest =>
-        akka.cluster.ddata.Replicator.Internal.WriteAck
+        org.apache.pekko.cluster.ddata.Replicator.Internal.WriteAck
 
       case WriteManifest =>
         writeFromBinary(directByteBuffer)

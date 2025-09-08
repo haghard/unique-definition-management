@@ -1,7 +1,7 @@
 package com.definition.api
 
-import akka.actor.typed.*
-import akka.actor.typed.scaladsl.AskPattern.Askable
+import org.apache.pekko.actor.typed.*
+import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
 
 import scala.concurrent.*
 import com.definition.domain.*
@@ -15,11 +15,11 @@ final class DefinitionServiceImpl(
 )(implicit system: ActorSystem[_])
     extends DefinitionService {
 
-  implicit val sch: Scheduler                = system.scheduler
-  implicit val askTimeout: akka.util.Timeout = Guardian.askTo
-  implicit val ec: ExecutionContext          = system.executionContext
+  implicit val sch: Scheduler                            = system.scheduler
+  implicit val askTimeout: org.apache.pekko.util.Timeout = Guardian.askTo
+  implicit val ec: ExecutionContext                      = system.executionContext
 
-  val lockMaxDuration: Long              = (Guardian.askTo.duration.toMillis * 2) + 2000
+  val lockTtl: Long                      = Guardian.askTo.duration.toMillis * 3
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
   override def conditionalPut(in: PutRequest): Future[PutReply] =
@@ -30,8 +30,8 @@ final class DefinitionServiceImpl(
         update(in)
     }
 
-  override def getCurrentValue(in: GetDefinitionLocationRequest): Future[GetDefinitionLocationReply] =
-    RelationalData.definitionIndexView
+  override def getCurrentValue(in: GetDefinitionLocationRequest): Future[GetDefinitionLocationReply] = ???
+  /*RelationalData.definitionIndexView
       .getCurrentLocation(UUID.fromString(in.ownerId))
       .map { rows =>
         rows.size match {
@@ -42,46 +42,47 @@ final class DefinitionServiceImpl(
           case _ =>
             GetDefinitionLocationReply(Some(DefinitionLocation(-1, -1)), None)
         }
-      }
+      }*/
 
   def create(in: PutRequest) =
-    RelationalData.create(in, lockMaxDuration) { in =>
-      takenDefinitions
-        .askWithStatus[PutReply] { askReplyTo =>
-          Create(
-            in.ownerId,
-            Definition(
-              in.definition.name,
-              in.definition.address,
-              in.definition.city,
-              in.definition.country,
-              in.definition.state,
-              in.definition.zipCode,
-              in.definition.brand
-            ),
-            actorRefResolver.toSerializationFormat(askReplyTo)
-          )
-        }
-    }(ec)
+    /// RelationalData.create(in, lockTtl) { in =>
+    takenDefinitions
+      .askWithStatus[PutReply] { askReplyTo =>
+        Create(
+          in.ownerId,
+          Definition(
+            in.definition.name,
+            in.definition.address,
+            in.definition.city,
+            in.definition.country,
+            in.definition.state,
+            in.definition.zipCode,
+            in.definition.brand
+          ),
+          actorRefResolver.toSerializationFormat(askReplyTo)
+        )
+      }
+  // }(ec)
 
   def update(in: PutRequest) =
-    RelationalData.update(in, lockMaxDuration) { (in, prevDefinitionLocation) =>
-      takenDefinitions
-        .askWithStatus[PutReply] { replyTo =>
-          Update(
-            in.ownerId,
-            Definition(
-              in.definition.name,
-              in.definition.address,
-              in.definition.city,
-              in.definition.country,
-              in.definition.state,
-              in.definition.zipCode,
-              in.definition.brand
-            ),
-            prevDefinitionLocation,
-            actorRefResolver.toSerializationFormat(replyTo)
-          )
-        }
-    }
+    // RelationalData.update(in, lockTtl) { (in, prevDefinitionLocation) =>
+    takenDefinitions
+      .askWithStatus[PutReply] { replyTo =>
+        Update(
+          in.ownerId,
+          Definition(
+            in.definition.name,
+            in.definition.address,
+            in.definition.city,
+            in.definition.country,
+            in.definition.state,
+            in.definition.zipCode,
+            in.definition.brand
+          ),
+          DefinitionLocation(in.location.get.bucketId, in.location.get.seqNum),
+          // .prevDefinitionLocation,
+          actorRefResolver.toSerializationFormat(replyTo)
+        )
+      }
+  // }(ec)
 }

@@ -1,11 +1,11 @@
 package com.definition
 
-import akka.Done
-import akka.actor.typed.{ActorRef, ActorSystem}
-import akka.actor.CoordinatedShutdown
-import akka.actor.CoordinatedShutdown.*
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.*
+import org.apache.pekko.Done
+import org.apache.pekko.actor.typed.{ActorRef, ActorSystem}
+import org.apache.pekko.actor.CoordinatedShutdown
+import org.apache.pekko.actor.CoordinatedShutdown.*
+import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.model.*
 import com.definition.api.*
 import com.definition.domain.command.Cmd
 
@@ -27,7 +27,7 @@ final case class Bootstrap(
 
   val config              = system.settings.config
   val terminationDeadline =
-    Duration.fromNanos(config.getDuration("akka.coordinated-shutdown.default-phase-timeout").toNanos)
+    Duration.fromNanos(config.getDuration("pekko.coordinated-shutdown.default-phase-timeout").toNanos)
 
   val shutdown                                         = CoordinatedShutdown(system)
   val grpcService: HttpRequest => Future[HttpResponse] =

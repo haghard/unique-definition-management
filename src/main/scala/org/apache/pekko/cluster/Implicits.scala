@@ -1,4 +1,4 @@
-package akka.cluster
+package org.apache.pekko.cluster
 
 object Implicits {
 
@@ -12,7 +12,7 @@ object Implicits {
     // `upNumber` is a monotonically growing sequence number which increases each time new incarnation of the process starts.
   }
 
-  implicit class VectorClockOps(val vc: akka.cluster.VectorClock) extends AnyVal {
+  implicit class VectorClockOps(val vc: org.apache.pekko.cluster.VectorClock) extends AnyVal {
     def internals(): String = vc.versions.mkString(",")
   }
 }

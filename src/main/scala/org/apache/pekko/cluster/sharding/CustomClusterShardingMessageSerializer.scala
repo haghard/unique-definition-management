@@ -1,13 +1,12 @@
-package akka.cluster.sharding
+package org.apache.pekko.cluster.sharding
 
-import akka.actor.ExtendedActorSystem
-import akka.cluster.ddata.ProtocDDataSupport
-import akka.cluster.ddata.protobuf.SerializationSupport
-import akka.cluster.sharding.ShardCoordinator.Internal
-import akka.cluster.sharding.ShardCoordinator.Internal.*
-import akka.cluster.sharding.protobuf.ClusterShardingMessageSerializer
-import akka.protobufv3.internal.CodedOutputStream
-import akka.serialization.ByteBufferSerializer
+import org.apache.pekko.actor.ExtendedActorSystem
+import org.apache.pekko.cluster.ddata.protobuf.SerializationSupport
+import org.apache.pekko.cluster.sharding.ShardCoordinator.Internal
+import org.apache.pekko.cluster.sharding.ShardCoordinator.Internal.*
+import org.apache.pekko.cluster.sharding.protobuf.ClusterShardingMessageSerializer
+import org.apache.pekko.protobufv3.internal.CodedOutputStream
+import org.apache.pekko.serialization.ByteBufferSerializer
 
 import java.nio.ByteBuffer
 import java.util.concurrent.ThreadLocalRandom
@@ -15,6 +14,7 @@ import scala.util.Using
 import scala.util.Using.Releasable
 
 import CustomClusterShardingMessageSerializer._
+import org.apache.pekko.cluster.ddata.ProtocDDataSupport
 
 /*
 com/typesafe/akka/akka-cluster-sharding_2.13/2.6.15/akka-cluster-sharding_2.13-2.6.15.jar!/reference.conf
@@ -52,7 +52,7 @@ final class CustomClusterShardingMessageSerializer(system: ExtendedActorSystem)
 
   override def toBinary(obj: AnyRef): Array[Byte] =
     obj match {
-      case state: akka.cluster.sharding.ShardCoordinator.Internal.State =>
+      case state: org.apache.pekko.cluster.sharding.ShardCoordinator.Internal.State =>
         val bts = coordinatorStateToProto(state).toByteArray
         system.log.warning(
           "a.c.s.ShardCoordinator.Internal.State:[shards:{}/regions:{}, {} bts]",
@@ -117,7 +117,7 @@ final class CustomClusterShardingMessageSerializer(system: ExtendedActorSystem)
           // Using.resource(new ByteBufferOutputStream(directBuf))(actorRefMessageToProto(shardRegion).writeTo(_))
         }
 
-      case state: akka.cluster.sharding.ShardCoordinator.Internal.State =>
+      case state: org.apache.pekko.cluster.sharding.ShardCoordinator.Internal.State =>
         /** On-line shards
           *
           * Size: 1 shard takes 195 bts, 2 shards takes 263 bts, 3 shards takes 333 bts
