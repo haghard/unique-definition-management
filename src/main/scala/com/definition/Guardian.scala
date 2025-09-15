@@ -11,31 +11,21 @@ import org.apache.pekko.cluster.sharding.typed.{ClusterShardingSettings, Sharded
 import org.apache.pekko.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, ShardedDaemonProcess}
 import org.apache.pekko.cluster.typed.SelfUp
 import org.apache.pekko
-import org.apache.pekko.persistence.query.{Offset, PersistenceQuery, TimestampOffset}
-import pekko.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
-import pekko.projection.r2dbc.scaladsl.R2dbcProjection
-import pekko.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
+import slick.jdbc.MySQLProfile
 import pekko.projection.ProjectionId
 import pekko.projection.eventsourced.scaladsl.EventSourcedProvider
-import pekko.projection.Projection
 import pekko.projection.ProjectionBehavior
-import pekko.projection.scaladsl.{Handler, SourceProvider}
-import pekko.persistence.query.typed.EventEnvelope
-import org.apache.pekko.persistence.query.typed.EventEnvelope
 
 import scala.collection.immutable
 import scala.concurrent.duration.DurationInt
 import com.definition.domain.command.*
 import com.definition.domain.event.*
 import org.apache.pekko.cluster.{utils, Member}
-import org.apache.pekko.persistence.Persistence
-import org.apache.pekko.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
-import org.apache.pekko.serialization.{Serialization, SerializationExtension}
+import org.apache.pekko.persistence.jdbc.query.scaladsl.JdbcReadJournal
 
-import scala.concurrent.Future
-//import slick.basic.DatabaseConfig
-//import slick.jdbc.MySQLProfile
-//import slick.jdbc.PostgresProfile
+import org.apache.pekko.persistence.typed.PersistenceId
+import org.apache.pekko.projection.slick.SlickProjection
+import slick.basic.DatabaseConfig
 
 import java.util.UUID
 
@@ -49,61 +39,72 @@ object Guardian {
     final case class SelfUpMsg(mba: immutable.SortedSet[Member]) extends Protocol
   }
 
-  val numberOfTags = 4
-  // val tags         = Vector.tabulate(numberOfTags)(_.toString)
-  // val name         = "events"
+  val numberOfTags   = 4
+  val projectionName = TakenDefinition.TypeKey.name + ".proj"
+  val tags           = Vector.tabulate(numberOfTags)(_.toString)
 
-  private def mkProjection(
-    idx: Int,
-    sliceRanges: immutable.Seq[Range],
-    takenDefinitions: ActorRef[Cmd]
-  )(implicit system: ActorSystem[_]) = {
-    val resolver: ActorRefResolver = ActorRefResolver(system)
+  def initProjections(takenDefinitions: ActorRef[Cmd])(implicit system: ActorSystem[_]): Unit = {
+    implicit val resolver: ActorRefResolver = ActorRefResolver(system)
+    val dbConfig                            = DatabaseConfig.forConfig[MySQLProfile]("pekko.projection.slick")
 
-    val sliceRange    = sliceRanges(idx)
-    val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
-    val projectionId  = ProjectionId.of(TakenDefinition.TypeKey.name, projectionKey)
-
-    // import pekko.projection.scaladsl.ProjectionManagement
-    // ProjectionManagement(system)
-    // ProjectionManagement(system).resume(projectionId)
-    // .getOffset[Offset](projectionId)
-    // .onComplete(r => println(s"$projectionId : $r"))(system.executionContext)
-
-    val minSlice                                         = sliceRanges.head.min
-    val maxSlice                                         = sliceRanges.head.max
-    val entityType: String                               = TakenDefinition.TypeKey.name
-    val sp: SourceProvider[Offset, EventEnvelope[Event]] =
-      EventSourcedProvider.eventsBySlices[Event](system, R2dbcReadJournal.Identifier, entityType, minSlice, maxSlice)
-
-    // TimestampOffset
-    R2dbcProjection
-      .atLeastOnceAsync[Offset, EventEnvelope[Event]](
-        projectionId,
-        settings = None,
-        sp,
-        handler = () =>
-          new Handler[EventEnvelope[Event]]() {
-            override def process(envelope: EventEnvelope[Event]): Future[Done] =
-              Future.successful {
-                println("***" + envelope.persistenceId);
-                Done
-              }
-          } // new EventHandler(resolver, takenDefinitions)(system)
-      )
-  }
-
-  def initProjections(region: ActorRef[Cmd])(implicit system: ActorSystem[_]): Unit = {
-    // val dbConfig = DatabaseConfig.forConfig[ MySQLProfile]("akka.projection.slick")
-    // val dbConfig = DatabaseConfig.forConfig[slick.jdbc.PostgresProfile]("akka.projection.slick")
-
-    val sliceRanges = EventSourcedProvider.sliceRanges(system, R2dbcReadJournal.Identifier, numberOfTags)
-
-    // val sliceRanges = Persistence(system).sliceRanges(numberOfTags)
     ShardedDaemonProcess(system).init(
-      TakenDefinition.TypeKey.name,
+      projectionName,
       numberOfTags,
-      i => ProjectionBehavior(mkProjection(i, sliceRanges, region)),
+      i => {
+        val projectionId   = ProjectionId.of(projectionName, tags(i))
+        val sourceProvider = EventSourcedProvider.eventsByTag[Event](system, JdbcReadJournal.Identifier, tags(i))
+        ProjectionBehavior(
+          SlickProjection
+            .atLeastOnceAsync(
+              projectionId,
+              sourceProvider,
+              dbConfig,
+              () =>
+                (env: pekko.projection.eventsourced.EventEnvelope[Event]) =>
+                  env.event match {
+                    case a: Acquired =>
+                      a.prevDefinitionLocation match {
+                        case Some(prevDefinitionLocation) =>
+                          takenDefinitions.askWithStatus[Done](replyTo =>
+                            com.definition.domain.command.Replace(
+                              ownerId = a.ownerId,
+                              definition = a.definition,
+                              acquiredSeqNum = a.seqNum,
+                              acquiredBucketId = PersistenceId.extractEntityId(env.persistenceId).toLong,
+                              prevDefinitionLocation = prevDefinitionLocation,
+                              replyTo = resolver.toSerializationFormat(replyTo)
+                            )
+                          )
+
+                        case None =>
+                          val row =
+                            DefinitionIndexViewRow(
+                              name = a.definition.name,
+                              definition = a.definition,
+                              ownerId = UUID.fromString(a.ownerId),
+                              bucketId = PersistenceId.extractEntityId(env.persistenceId).toLong,
+                              sequenceNr = a.seqNum,
+                              when = env.timestamp
+                            )
+                          RelationalData.definitionIndexView.createAndUnlock(row)
+                      }
+
+                    case r: Released =>
+                      val row =
+                        DefinitionIndexViewRow(
+                          name = r.definition.name,
+                          definition = r.definition,
+                          ownerId = UUID.fromString(r.ownerId),
+                          bucketId = r.acquiredBucketId,
+                          sequenceNr = r.acquiredSeqNum,
+                          when = env.timestamp
+                        )
+                      RelationalData.definitionIndexView.updateAndUnlock(row)
+
+                  }
+            )
+        )
+      },
       ShardedDaemonProcessSettings(system),
       Some(ProjectionBehavior.Stop)
     )
@@ -133,10 +134,6 @@ object Guardian {
             cluster.subscriptions ! org.apache.pekko.cluster.typed.Unsubscribe(ctx.self)
             ctx.log.warn("★ ★ ★  Up: [{}]  ★ ★ ★", membersByAge.mkString(","))
 
-            /*println(
-              SerializationExtension(ctx.system).serializerFor(classOf[com.definition.domain.event.Acquired]).identifier
-            )*/
-
             val shardingSettings = ClusterShardingSettings(system)
             val clusterSharding  = ClusterSharding(system)
 
@@ -149,7 +146,7 @@ object Guardian {
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
                 )
 
-            /*val DDataShardReplicatorPath =
+            val DDataShardReplicatorPath =
               RootActorPath(system.deadLetters.path.address) / "system" / "sharding" / "replicator"
             system.toClassic
               .actorSelection(DDataShardReplicatorPath)
@@ -157,10 +154,9 @@ object Guardian {
               .foreach { ddataShardReplicator =>
                 org.apache.pekko.cluster.utils
                   .shardingStateChanges(ddataShardReplicator, cluster.selfMember.address.host.getOrElse("local"))
-              }(system.executionContext)*/
+              }(system.executionContext)
 
-            // RelationalData.createAllTables()
-
+            RelationalData.createAllTables()
             initProjections(takenDefinition)
             Bootstrap(takenDefinition, selfAddress.host.get, grpcPort)(ctx.system)
             Behaviors.same

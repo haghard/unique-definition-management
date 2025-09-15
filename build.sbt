@@ -2,25 +2,18 @@ ThisBuild / version := "0.1.0"
 
 ThisBuild / scalaVersion := "2.13.16"
 
-/*
-val AkkaVersion = "2.6.21"
-val akkaMngVersion = "1.1.4"
-val AkkaHttpVersion = "10.2.10"
-val typesafeConfigVersion = "1.4.2"
-val AkkaProjectionVersion = "1.2.5" //"1.3.0"
-val AkkaPersistenceJdbcV = "5.0.4"
-*/
-
 val ProjectName = "unique-definition-mng"
 val AmmoniteVersion = "3.0.2"
 
+//https://pekko.apache.org/docs/pekko/current/release-notes/releases-1.2.html
+//https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#eventsbyslices
 val pekkoV = "1.2.0"
 //https://github.com/apache/pekko-http/tags
 val pekkoHttpV = "1.2.0"
 //https://github.com/apache/pekko-management/tags
 val PekkoManagementVersion = "1.1.1"
-//val PekkoProjectionVersion = "1.1.0"
-val PekkoProjectionVersion = "1.0.0" //1.1.0
+
+val PekkoProjectionVersion = "1.1.0"
 val jdkV = "17"
 
 lazy val java17Settings = Seq(
@@ -62,19 +55,20 @@ lazy val root = (project in file("."))
 
 shellPrompt := { state => s"${SbtUtils.prompt(ProjectName)}> " }
 
-//https://pekko.apache.org/docs/pekko/current/release-notes/releases-1.2.html
-//https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#eventsbyslices
 libraryDependencies ++= Seq(
   //  show dependencyList
   "org.apache.pekko" %% "pekko-http" % pekkoHttpV,
   "org.apache.pekko" %% "pekko-http-spray-json"% pekkoHttpV,
 
-  //"org.apache.pekko" %% "pekko-protobuf-v3" % pekkoV,
+  "org.apache.pekko" %% "pekko-protobuf-v3" % pekkoV,
   "org.apache.pekko" %% "pekko-actor-typed" % pekkoV,
   "org.apache.pekko" %% "pekko-cluster-sharding-typed" % pekkoV,
 
   "org.apache.pekko" %% "pekko-distributed-data" % pekkoV,
+
+  "org.apache.pekko" %% "pekko-persistence-query" % pekkoV,
   "org.apache.pekko" %% "pekko-persistence-typed" % pekkoV,
+
   "org.apache.pekko" %% "pekko-stream-typed" % pekkoV,
 
   "org.apache.pekko" %% "pekko-coordination" % pekkoV,
@@ -84,30 +78,35 @@ libraryDependencies ++= Seq(
   "org.apache.pekko" %% "pekko-management-cluster-bootstrap" % PekkoManagementVersion,
   "org.apache.pekko" %% "pekko-management-cluster-http" % PekkoManagementVersion,
 
-  //protobuf-java-3.21.12.jar, jar org = com.google.protobuf, entry target = google/protobuf/struct.proto
-
-  //"com.mysql" % "mysql-connector-j" % "9.4.0",
-  //"io.asyncer" % "r2dbc-mysql" % "1.4.1",
-
-  "org.apache.pekko" %% "pekko-persistence-query" % pekkoV,
-
-  //"org.apache.pekko" %% "pekko-projection-slick" % PekkoProjectionVersion,
   "org.apache.pekko" %% "pekko-projection-core" % PekkoProjectionVersion,
   "org.apache.pekko" %% "pekko-projection-eventsourced" % PekkoProjectionVersion,
-  //https://pekko.apache.org/docs/pekko-projection/current/durable-state.html
-  //"org.apache.pekko" %% "pekko-projection-durable-state" % PekkoProjectionVersion,
+
+  "org.apache.pekko" %% "pekko-projection-slick" % PekkoProjectionVersion,
+  "org.apache.pekko" %% "pekko-persistence-jdbc" % "1.1.1",
+
+  "mysql" % "mysql-connector-java" % "8.0.33",
+
 
   //https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#publish-events-for-lower-latency-of-eventsbyslices
-  "org.apache.pekko" %% "pekko-persistence-r2dbc" % "1.0.0",
-  "org.apache.pekko" %% "pekko-projection-r2dbc"  % "1.0.0",
-  
+  //"org.apache.pekko" %% "pekko-persistence-r2dbc" % PekkoProjectionVersion,
+  //"org.apache.pekko" %% "pekko-projection-r2dbc"  % PekkoProjectionVersion,
+
+
+  //https://github.com/apache/pekko-persistence-r2dbc/blob/7a3a7180bc06318d49cd7f400b709836ffbc8487/project/Dependencies.scala#L35
+  /*
+  "org.postgresql" % "r2dbc-postgresql" % "1.0.7.RELEASE",
+  "io.r2dbc" % "r2dbc-spi" % "1.0.0.RELEASE",
+  "io.r2dbc" % "r2dbc-pool" % "1.0.2.RELEASE",
+  */
+
   "org.apache.pekko" %% "pekko-slf4j" % pekkoV,
   "ch.qos.logback" % "logback-classic" %  "1.5.18",
   "org.slf4j"      % "slf4j-api"       %  "2.0.17",
 
-
   "io.aeron" % "aeron-driver" % "1.46.9", //is jdk17 only
   "io.aeron" % "aeron-client" % "1.46.9",
+
+  "org.hdrhistogram" % "HdrHistogram" % "2.2.2",
 
   "com.lihaoyi" % "ammonite" % AmmoniteVersion % "test" cross CrossVersion.full
 )
@@ -157,6 +156,11 @@ dependencyOverrides ++= Seq(
   "org.apache.pekko" %% "pekko-management" % PekkoManagementVersion,
   "org.apache.pekko" %% "pekko-management-cluster-bootstrap" % PekkoManagementVersion,
   "org.apache.pekko" %% "pekko-management-cluster-http" % PekkoManagementVersion,
+
+  "org.apache.pekko" %% "pekko-projection-slick" % PekkoProjectionVersion,
+  "org.apache.pekko" %% "pekko-projection-core" % PekkoProjectionVersion,
+  "org.apache.pekko" %% "pekko-projection-eventsourced" % PekkoProjectionVersion,
+  "org.apache.pekko" %% "pekko-persistence-jdbc" % "1.1.1",
 )
 
 //test:run

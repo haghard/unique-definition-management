@@ -1,4 +1,4 @@
-# Distributed sharded index that support ConditionPut: acquire only if the object doesn’t belong to other owner_id
+### Distributed sharded index that support ConditionPut: acquire only if the object doesn’t belong to other owner_id
 
 ## Requirements
 
@@ -118,79 +118,6 @@ grpcurl -d '{"definition":{"name":"zff13334","address":"a","city":"FL","state":"
  
 
 ```
-
-```
-TRUNCATE table akka_projection_management;
-TRUNCATE table akka_projection_offset_store;
-TRUNCATE table snapshot;
-TRUNCATE table event_tag;
-DELETE FROM event_journal;
-DROP TABLE definition_index_view;
-```
-
-
-"Correct but not fast. Fast but Not Correct" ->  "Fast and Correct".
-
-*****
-
-TODO:
-1) pekko.persistence.r2dbc.journal.publish-events = on
-2) At least once delivery instead of db locking
-
-
-### Links
-
-https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#eventsbyslices
-https://vladmihalcea.com/database-job-queue-skip-locked/
-https://habr.com/ru/articles/940066/
-https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html
-
-
-
-https://www.cs.usfca.edu/~galles/visualization/BPlusTree.html
-https://planetscale.com/blog/btrees-and-database-indexes
-https://github.com/scylladb/scylla-tools-java/blob/0b4accdd5ecb69a6346151987ba974e6be02b123/src/java/org/apache/cassandra/utils/btree/BTree.java
-
-
-
-
-https://doc.akka.io/libraries/akka-core/2.6/typed/reliable-delivery.html#durable-producer
-
-https://github.com/crossroad0201/akka-cluster-sharding-sandbox/tree/main/src/main/scala/crossroad0201/sandbox/akkaclustersharding/pattern_b
-
-dynamic-bucketing: https://planetscale.com/blog/btrees-and-database-indexes
-
-CAS
-
-https://github.com/crossroad0201/akka-cluster-sharding-sandbox/blob/main/src/main/scala/crossroad0201/sandbox/akkaclustersharding/pattern_b/TodoActorBroker.scala
-
-https://github.com/hoytech/riblet/blob/master/src/RIBLT.h
-
-Zone {
-
-}
-
-http://muratbuffalo.blogspot.com/2020/05/matchmaker-paxos-reconfigurable.html
-
-https://github.com/MouslihAbdelhakim/sicrograd?tab=readme-ov-file
-
-https://jhellerstein.github.io/blog/crdt-dont-read/
-https://www.geeknarrator.com/blog/buf-schema-driven-dev
-
-
-*****
-I-offender - operations that may break app level invariants when executed concurrently.
-
-Create(owner_id=1) <> Create(owner_id=1)
-Update(owner_id=1) Update(owner_id=1,)
-Concurrent: Create and Update that modify the same definition.
-
-
-*******
-
-Atomic read-modify-write loop
-Linearizable CAS register
-
 
 ## License
 This code is open source software licensed under the [Apache 2.0 License](http://www.apache.org/licenses/LICENSE-2.0.html).

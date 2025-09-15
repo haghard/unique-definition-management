@@ -1,4 +1,3 @@
-/*
 package com.definition
 
 import org.apache.pekko.Done
@@ -6,9 +5,10 @@ import org.apache.pekko.actor.typed.ActorSystem
 import org.apache.pekko.projection.slick.SlickProjection
 import com.definition.api.*
 import com.definition.domain.*
+import org.apache.pekko.persistence.jdbc.testkit.scaladsl.SchemaUtils
 import scalapb.*
 import slick.basic.DatabaseConfig
-import slick.jdbc.{GetResult, MySQLProfile}
+import slick.jdbc.{GetResult, MySQLProfile, PostgresProfile}
 
 import java.util.UUID
 import scala.concurrent.*
@@ -107,8 +107,6 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
     def readAndLockDefinition(
       ownerId: UUID
     ): DBIO[scala.collection.immutable.Seq[(Long, Long, Definition, Boolean, Long)]] = {
-      println("sdfasd")
-
       self
         .filter(_.ownerId === ownerId)
         .map(rep => (rep.bucketId, rep.sequenceNr, rep.definition, rep.isLocked, rep.when))
@@ -128,14 +126,12 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
       self.filter(_.ownerId === ownerId).map(rep => (rep.bucketId, rep.sequenceNr, rep.definition))
     }
 
-    def getCurrentLocation(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long, Definition)]] = {
-      println("sdfasd")
+    def getCurrentLocation(ownerId: UUID): Future[scala.collection.immutable.Seq[(Long, Long, Definition)]] =
       /*db.run(
         sql"""SELECT BUCKET_ID, SEQ_NUM, DEFINITION FROM definition_index_view WHERE OWNER_ID = UUID_TO_BIN('#$ownerId') FOR SHARE"""
           .as[(Long, Long, Definition)]
       )*/
       db.run(self.locationDefinition(ownerId).result)
-    }
 
     def createAndUnlock(row: DefinitionIndexViewRow): Future[Done] = {
       val insertNew = definitionIndexView.insertOrUpdate(row)
@@ -373,6 +369,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
   val ddl: profile.DDL = tables.map(_.schema).reduce(_ ++ _)
 
   val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("pekko.projection.slick")
+  // val dbConfig = DatabaseConfig.forConfig[PostgresProfile]("pekko.projection.slick")
 
   val db = {
     val local = dbConfig.db
@@ -386,12 +383,13 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile) {
   }
 
   def createAllTables()(implicit sys: ActorSystem[_]): Future[Done] =
-    db.run(ddl.createIfNotExists)
+    SchemaUtils
+      .createIfNotExists()
+      .flatMap(_ => db.run(ddl.createIfNotExists))
       .flatMap(_ => SlickProjection.createTablesIfNotExists(dbConfig))
 }
 
 object RelationalData extends SlickTablesGeneric(slick.jdbc.MySQLProfile)
- */
 
 /*
 akka.pattern.retry(

@@ -1,7 +1,7 @@
 package org.apache.pekko.cluster.ddata
 
 import org.apache.pekko.actor.ExtendedActorSystem
-import org.apache.pekko.cluster.ddata.ORSet
+import org.apache.pekko.cluster.ddata.*
 import org.apache.pekko.cluster.ddata.protobuf.ReplicatedDataSerializer
 
 final class CRDTSerializer(system: ExtendedActorSystem)
@@ -14,7 +14,7 @@ final class CRDTSerializer(system: ExtendedActorSystem)
 
   override def toBinary(obj: AnyRef): Array[Byte] =
     obj match {
-      case reg: org.apache.pekko.cluster.ddata.LWWRegister[_] @unchecked =>
+      case reg: LWWRegister[_] @unchecked =>
         reg.value match {
           // State from akka.cluster.sharding.DDataShardCoordinator
           case state: org.apache.pekko.cluster.sharding.ShardCoordinator.Internal.State =>
@@ -27,6 +27,7 @@ final class CRDTSerializer(system: ExtendedActorSystem)
         system.log.warning("ORSet({})", orSet.elements.mkString(","))
         super.toBinary(orSet)
 
+      // case orMap: org.apache.pekko.cluster.ddata.ORMultiMap[_,_] =>
       case crdt =>
         system.log.warning("Other CRDT {}", crdt)
         super.toBinary(obj)

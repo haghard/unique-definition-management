@@ -1,0 +1,14 @@
+#https://github.com/apache/pekko-persistence-r2dbc/blob/main/docker/docker-compose-mysql.yml
+services:
+  mysql-db:
+    image: mysql:9.1.0
+    container_name: docker-mysql-910
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "--password=root", "ping", "-h", "127.0.0.1" ]
+      interval: 1s
+      timeout: 1s
+      retries: 60

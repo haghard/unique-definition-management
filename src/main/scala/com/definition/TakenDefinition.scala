@@ -56,13 +56,14 @@ object TakenDefinition {
 
       EventSourcedBehavior
         .withEnforcedReplies[Cmd, Event, TakenDefinitionState](
-          PersistenceId.ofUniqueId(entityCtx.entityId),
+          PersistenceId(TypeKey.name, entityCtx.entityId),
+          // PersistenceId.ofUniqueId(entityCtx.entityId),
           TakenDefinitionState(),
           (state, cmd) => state.applyCmd(cmd, entityId),
           (state, event) => state.applyEvt(event)
         )
         .withEventPublishing(true)
-        // .withTagger(_ => Set(math.abs(entityId % Guardian.numberOfTags).toString))
+        .withTagger(_ => Set(math.abs(entityId % Guardian.numberOfTags).toString))
         .snapshotWhen { case (_, _, sequenceNr) =>
           val ifSnap = sequenceNr % snapshotEveryNEvents == 0
           if (ifSnap)
