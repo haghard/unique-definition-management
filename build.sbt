@@ -7,7 +7,7 @@ val AmmoniteVersion = "3.0.2"
 
 //https://pekko.apache.org/docs/pekko/current/release-notes/releases-1.2.html
 //https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#eventsbyslices
-val pekkoV = "1.2.0"
+val pekkoV = "1.2.1"
 //https://github.com/apache/pekko-http/tags
 val pekkoHttpV = "1.2.0"
 //https://github.com/apache/pekko-management/tags
@@ -100,7 +100,7 @@ libraryDependencies ++= Seq(
   */
 
   "org.apache.pekko" %% "pekko-slf4j" % pekkoV,
-  "ch.qos.logback" % "logback-classic" %  "1.5.18",
+  "ch.qos.logback" % "logback-classic" %  "1.5.19",
   "org.slf4j"      % "slf4j-api"       %  "2.0.17",
 
   "io.aeron" % "aeron-driver" % "1.46.9", //is jdk17 only
