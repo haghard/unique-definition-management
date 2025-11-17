@@ -4,8 +4,8 @@ import org.apache.pekko.actor.typed.*
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
 
 import scala.concurrent.*
-import com.definition.domain.*
 import com.definition.*
+import com.definition.domain.DefinitionLocation
 import com.definition.domain.command.*
 
 import java.util.UUID
@@ -19,8 +19,9 @@ final class DefinitionServiceImpl(
   implicit val askTimeout: org.apache.pekko.util.Timeout = Guardian.askTo
   implicit val ec: ExecutionContext                      = system.executionContext
 
-  val lockTtl: Long                      = Guardian.askTo.duration.toMillis * 3
+  val lockTTL: Long                      = Guardian.askTo.duration.toMillis * 3
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
+  val numberOfShards                     = system.settings.config.getInt("pekko.cluster.sharding.number-of-shards")
 
   override def conditionalPut(in: PutRequest): Future[PutReply] =
     in.location match {
@@ -33,55 +34,32 @@ final class DefinitionServiceImpl(
   override def getCurrentValue(in: GetDefinitionLocationRequest): Future[GetDefinitionLocationReply] =
     RelationalData.definitionIndexView
       .getCurrentLocation(UUID.fromString(in.ownerId))
-      .map { rows =>
-        rows.size match {
-          case 0 => GetDefinitionLocationReply(None, None)
-          case 1 =>
-            val (entityId, seqNum, definition) = rows.head
-            GetDefinitionLocationReply(Some(DefinitionLocation(entityId, seqNum)), Some(definition))
-          case _ =>
-            GetDefinitionLocationReply(Some(DefinitionLocation(-1, -1)), None)
-        }
+      .map {
+        case None =>
+          GetDefinitionLocationReply(None)
+        case Some((shardId, definitionId)) =>
+          GetDefinitionLocationReply(Some(DefinitionLocation(shardId, definitionId)))
       }
 
   def create(in: PutRequest) =
-    RelationalData.create(in, lockTtl) { in =>
+    RelationalData.create(in, lockTTL, math.abs(in.definition.hashCode() % numberOfShards)) { (in, definitionLocation) =>
       takenDefinitions
         .askWithStatus[PutReply] { askReplyTo =>
-          Create(
-            in.ownerId,
-            Definition(
-              in.definition.name,
-              in.definition.address,
-              in.definition.city,
-              in.definition.country,
-              in.definition.state,
-              in.definition.zipCode,
-              in.definition.brand
-            ),
-            actorRefResolver.toSerializationFormat(askReplyTo)
-          )
+          Create(in.ownerId, definitionLocation, actorRefResolver.toSerializationFormat(askReplyTo))
         }
     }(ec)
 
   def update(in: PutRequest) =
-    RelationalData.update(in, lockTtl) { (in, prevDefinitionLocation) =>
-      takenDefinitions
-        .askWithStatus[PutReply] { replyTo =>
-          Update(
-            in.ownerId,
-            Definition(
-              in.definition.name,
-              in.definition.address,
-              in.definition.city,
-              in.definition.country,
-              in.definition.state,
-              in.definition.zipCode,
-              in.definition.brand
-            ),
-            prevDefinitionLocation,
-            actorRefResolver.toSerializationFormat(replyTo)
-          )
-        }
+    RelationalData.update(in, lockTTL, math.abs(in.definition.hashCode() % numberOfShards)) {
+      (in, prevLocation, newLocation) =>
+        takenDefinitions
+          .askWithStatus[PutReply] { replyTo =>
+            Update(
+              in.ownerId,
+              newLocation,
+              prevLocation,
+              actorRefResolver.toSerializationFormat(replyTo)
+            )
+          }
     }(ec)
 }

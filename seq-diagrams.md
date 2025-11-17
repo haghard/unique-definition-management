@@ -54,7 +54,7 @@ entity TakenDefinition
 
 entity TakenDefinitionProjection
 
-Client --> ServiceApi : Create
+Client --> ServiceApi : Upadate(ownerId)
 
 ServiceApi --> DB: readAndLockDefinition(ownerId)
 
@@ -69,7 +69,7 @@ TakenDefinition --> TakenDefinition: ifAvailable persist(Acquired(ownerId, defin
 TakenDefinition --> ServiceApi : Reply 
 ServiceApi --> Client: Reply
 
-TakenDefinition --> TakenDefinitionProjection: Acquired(ownerId, definition, seqNum, prevDefinitionLocation)
+TakenDefinition --> TakenDefinitionProjection: Acquired(ownerId, definition, newLocation, prevDefinitionLocation)
 TakenDefinitionProjection --> TakenDefinitionProjection: takenDefinitions.ask(Replace(definition,prevDefinitionLocation))
 
 TakenDefinitionProjection --> TakenDefinition: Replace(definition, prevLocation) 

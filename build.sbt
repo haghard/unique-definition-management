@@ -1,15 +1,15 @@
 ThisBuild / version := "0.1.0"
 
-ThisBuild / scalaVersion := "2.13.16"
+ThisBuild / scalaVersion := "2.13.17"
 
 val ProjectName = "unique-definition-mng"
-val AmmoniteVersion = "3.0.2"
+val AmmoniteVersion = "3.0.3"
 
 //https://pekko.apache.org/docs/pekko/current/release-notes/releases-1.2.html
 //https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#eventsbyslices
 val pekkoV = "1.2.1"
 //https://github.com/apache/pekko-http/tags
-val pekkoHttpV = "1.2.0"
+val pekkoHttpV = "1.3.0"
 //https://github.com/apache/pekko-management/tags
 val PekkoManagementVersion = "1.1.1"
 
@@ -25,6 +25,10 @@ lazy val java17Settings = Seq(
   "--add-opens",
   "java.base/sun.nio.ch=ALL-UNNAMED"
 )
+
+def profileSettings =
+  Seq(Compile, Test)
+    .map(config => scalacOptions in config := List("-Ycache-macro-class-loader:last-modified", "-Yprofile-trace"))
 
 lazy val root = (project in file("."))
   .settings(
@@ -49,6 +53,14 @@ lazy val root = (project in file("."))
       "-Xmigration", //Emit migration warnings under -Xsource:3 as fatal warnings, not errors; -Xmigration disables fatality (#10439 by @som-snytt, #10511)
       "-Vimplicits", // makes the compiler print implicit resolution chains when no implicit value can be found
       "-Ylog-classpath", //log classpath
+      "-explaintypes",
+      "-Ystatistics",
+      //sbt -Dsbt.task.timings=true -Dsbt.traces=true c
+
+      //https://www.scala-lang.org/news/3.6.3/?t=awU9HaWG_gTV7a7Xc7NVZQ&s=03
+      //"-Yprofile-enabled",
+      //"-Yprofile-trace:/Users/vadimbondarev/projects/haghard/unique-definition-management/compiler.trace",
+      //"-Yprofile-destination:/Users/vadimbondarev/projects/haghard/unique-definition-management/profiler.output"
     )
   )
   .enablePlugins(PekkoGrpcPlugin, JavaAppPackaging, DockerPlugin)
@@ -86,6 +98,11 @@ libraryDependencies ++= Seq(
 
   "mysql" % "mysql-connector-java" % "8.0.33",
 
+  //https://habr.com/ru/articles/936458/ 
+  "com.github.fzakaria" % "ascii85" % "1.2",
+
+  //https://github.com/f4b6a3/uuid-creator
+  //"com.github.f4b6a3" % "uuid-creator" % "6.1.1",
 
   //https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#publish-events-for-lower-latency-of-eventsbyslices
   //"org.apache.pekko" %% "pekko-persistence-r2dbc" % PekkoProjectionVersion,
@@ -100,7 +117,7 @@ libraryDependencies ++= Seq(
   */
 
   "org.apache.pekko" %% "pekko-slf4j" % pekkoV,
-  "ch.qos.logback" % "logback-classic" %  "1.5.19",
+  "ch.qos.logback" % "logback-classic" %  "1.5.20",
   "org.slf4j"      % "slf4j-api"       %  "2.0.17",
 
   "io.aeron" % "aeron-driver" % "1.46.9", //is jdk17 only

@@ -5,10 +5,10 @@ import org.apache.pekko.actor.RootActorPath
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.scaladsl.adapter.TypedActorSystemOps
-import org.apache.pekko.actor.typed.{ActorRef, ActorRefResolver, ActorSystem, Behavior}
+import org.apache.pekko.actor.typed.*
 import org.apache.pekko.cluster.ddata.SelfUniqueAddress
-import org.apache.pekko.cluster.sharding.typed.{ClusterShardingSettings, ShardedDaemonProcessSettings}
-import org.apache.pekko.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, ShardedDaemonProcess}
+import org.apache.pekko.cluster.sharding.typed.*
+import org.apache.pekko.cluster.sharding.typed.scaladsl.*
 import org.apache.pekko.cluster.typed.SelfUp
 import org.apache.pekko
 import slick.jdbc.MySQLProfile
@@ -20,10 +20,8 @@ import scala.collection.immutable
 import scala.concurrent.duration.DurationInt
 import com.definition.domain.command.*
 import com.definition.domain.event.*
-import org.apache.pekko.cluster.{utils, Member}
+import org.apache.pekko.cluster.*
 import org.apache.pekko.persistence.jdbc.query.scaladsl.JdbcReadJournal
-
-import org.apache.pekko.persistence.typed.PersistenceId
 import org.apache.pekko.projection.slick.SlickProjection
 import slick.basic.DatabaseConfig
 
@@ -31,7 +29,7 @@ import java.util.UUID
 
 object Guardian {
 
-  implicit val askTo: org.apache.pekko.util.Timeout = org.apache.pekko.util.Timeout(4.seconds)
+  implicit val askTo: org.apache.pekko.util.Timeout = org.apache.pekko.util.Timeout(6.seconds)
 
   sealed trait Protocol
 
@@ -63,15 +61,13 @@ object Guardian {
                 (env: pekko.projection.eventsourced.EventEnvelope[Event]) =>
                   env.event match {
                     case a: Acquired =>
-                      a.prevDefinitionLocation match {
-                        case Some(prevDefinitionLocation) =>
+                      a.prevLocation match {
+                        case Some(prev) =>
                           takenDefinitions.askWithStatus[Done](replyTo =>
                             com.definition.domain.command.Replace(
                               ownerId = a.ownerId,
-                              definition = a.definition,
-                              acquiredSeqNum = a.seqNum,
-                              acquiredBucketId = PersistenceId.extractEntityId(env.persistenceId).toLong,
-                              prevDefinitionLocation = prevDefinitionLocation,
+                              location = a.location,
+                              prevDefinitionLocation = prev,
                               replyTo = resolver.toSerializationFormat(replyTo)
                             )
                           )
@@ -79,11 +75,9 @@ object Guardian {
                         case None =>
                           val row =
                             DefinitionIndexViewRow(
-                              name = a.definition.name,
-                              definition = a.definition,
+                              shardId = a.location.shardId,
+                              definitionId = a.location.definitionId,
                               ownerId = UUID.fromString(a.ownerId),
-                              bucketId = PersistenceId.extractEntityId(env.persistenceId).toLong,
-                              sequenceNr = a.seqNum,
                               when = env.timestamp
                             )
                           RelationalData.definitionIndexView.createAndUnlock(row)
@@ -92,15 +86,12 @@ object Guardian {
                     case r: Released =>
                       val row =
                         DefinitionIndexViewRow(
-                          name = r.definition.name,
-                          definition = r.definition,
+                          shardId = r.newLocation.shardId,
+                          definitionId = r.newLocation.definitionId,
                           ownerId = UUID.fromString(r.ownerId),
-                          bucketId = r.acquiredBucketId,
-                          sequenceNr = r.acquiredSeqNum,
                           when = env.timestamp
                         )
-                      RelationalData.definitionIndexView.updateAndUnlock(row)
-
+                      RelationalData.definitionIndexView.updateAndUnlock(row /*r.prevLocation*/ )
                   }
             )
         )
@@ -141,7 +132,7 @@ object Guardian {
               clusterSharding
                 .init(
                   Entity(TakenDefinition.TypeKey)(TakenDefinition(_, snapshotEveryNEvents = 10))
-                    .withMessageExtractor(TakenDefinition.Extractor(shardingSettings.numberOfShards))
+                    .withMessageExtractor(TakenDefinition.Extractor( /*shardingSettings.numberOfShards*/ ))
                     .withStopMessage(Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
                 )

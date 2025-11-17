@@ -68,22 +68,12 @@ http GET 127.0.0.2:8079/definitions/cluster/shards
 http GET 127.0.0.2:8079/definitions/cluster/shards/tkn-dfn
 
 
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"3341739074684379528","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"aas13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"6898668511187520942","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"aas13335","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"2906301794710397039","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"aas13336","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"5481507287789486185","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"aas13336","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"5481507287789486185","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff6451324","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"3341739074684379528","seqNum":"3"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff6451325","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"4875145662544880660","seqNum":"1"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff6451326","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"6031681633450188570","seqNum":"1"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645181","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645182","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96482" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"322367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645186","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481","location":{"shardId":2,"definitionId":2} }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
-grpcurl -d '{"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/GetCurrentValue
 
 ```
 
@@ -97,9 +87,11 @@ Create conflict
 
 // Thread.sleep(3_000) for local testing
 
-grpcurl -d '{"definition":{"name":"aff645a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"bff645b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+T1
+grpcurl -d '{"definition":{"name":"ff645181","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
+T2
+grpcurl -d '{"definition":{"name":"ff645182","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 ```
 
@@ -111,13 +103,31 @@ Update conflict
 
 // Thread.sleep(3_000) for local testing
 
-grpcurl -d '{"definition":{"name":"bbbff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645181","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
-grpcurl -d '{"definition":{"name":"xff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"3958406442293610682","seqNum":"1"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"zff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"3958406442293610682","seqNum":"1"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645186","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481","location":{"shardId":2,"definitionId":1} }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645186","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481","location":{"shardId":2,"definitionId":1} }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+
+OR
+
+grpcurl -d '{"definition":{"name":"ff645181","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+grpcurl -d '{"definition":{"name":"ff645185","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481","location":{"shardId":2,"definitionId":1} }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645185","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96483" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+
+
+grpcurl -d '{"definition":{"name":"ff645185","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96481","location":{"shardId":2,"definitionId":1} }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645185","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"311367c3-9ad3-47ef-a6b0-784d52c96482","location":{"shardId":3,"definitionId":1} }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
  
 
 ```
+
+
+"Correct but not fast. Fast but Not Correct" ->  "Fast and Correct".
+
 
 ## License
 This code is open source software licensed under the [Apache 2.0 License](http://www.apache.org/licenses/LICENSE-2.0.html).
