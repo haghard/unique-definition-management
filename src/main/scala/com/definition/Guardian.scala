@@ -12,6 +12,7 @@ import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, ShardedDae
 import akka.cluster.typed.SelfUp
 import akka.cluster.*
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
+import akka.persistence.typed.PersistenceId
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.slick.SlickProjection
@@ -91,19 +92,20 @@ object Guardian {
                         ownerId = a.ownerId,
                         definition = a.definition,
                         acquiredSeqNum = a.seqNum,
-                        acquiredBucketId = env.persistenceId.toLong,
+                        acquiredBucketId = PersistenceId.extractEntityId(env.persistenceId).toLong,
                         prevDefinitionLocation = prevDefinitionLocation,
                         replyTo = resolver.toSerializationFormat(replyTo)
                       )
                     )
 
                   case None =>
+
                     val row =
                       DefinitionIndexViewRow(
                         name = a.definition.name,
                         definition = a.definition,
                         ownerId = UUID.fromString(a.ownerId),
-                        bucketId = env.persistenceId.toLong,
+                        bucketId = PersistenceId.extractEntityId(env.persistenceId).toLong,
                         sequenceNr = a.seqNum,
                         when = env.timestamp
                       )

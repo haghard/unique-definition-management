@@ -56,7 +56,7 @@ object TakenDefinition {
 
       EventSourcedBehavior
         .withEnforcedReplies[Cmd, Event, TakenDefinitionState](
-          PersistenceId.ofUniqueId(entityCtx.entityId),
+          PersistenceId(TypeKey.name, entityCtx.entityId),
           TakenDefinitionState(),
           (state, cmd) => state.applyCmd(cmd, entityId),
           (state, event) => state.applyEvt(event)
@@ -93,7 +93,7 @@ object TakenDefinition {
       cmd match {
         case Create(ownerId, definition, replyTo) =>
           ctx.log.info(s"★★★> Create ${definition.name} to $ownerId")
-          // Thread.sleep(3_000) // for local testing
+          Thread.sleep(3_000) // for local testing
 
           pbState.contentKeySeqNum.get(definition.contentKey) match {
             case Some(seqNum) =>
@@ -123,7 +123,7 @@ object TakenDefinition {
 
         case Update(ownerId, definition, prevDefinitionLocation, replyTo) =>
           ctx.log.info(s"★★★> Update ${definition.name}  OwnerId:$ownerId")
-          // Thread.sleep(3_000) // for local testing
+          Thread.sleep(3_000) // for local testing
 
           pbState.contentKeySeqNum.get(definition.contentKey) match {
             case Some(seqNum) =>

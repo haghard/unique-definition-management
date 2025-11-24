@@ -1,4 +1,4 @@
-# Distributed sharded index that support ConditionPut: acquire only if the object doesn’t belong to other owner_id
+## Distributed sharded index that support ConditionPut: acquire only if the object doesn’t belong to other owner_id
 
 ## Requirements
 
@@ -17,22 +17,28 @@ Each unique definition belongs to exactly one `owner_id` at any point in time - 
 
 It is a relative order invariant. Acquiring a new definition requires condition check, and then releasing its current definition which doesn't require any checks and cannot fail. 
 Causal ordering if enough to guarantee that we never violate it.
- 
-*****
-I-offender - operations that may break app level invariants when executed concurrently.
-
-Create(owner_id=1) <> Create(owner_id=1)
-Update(owner_id=1) Update(owner_id=1,)
-Concurrent: Create and Update that modify the same definition.
-
-
-*******
 
 
 ### Write path
  1) One database RTT to transactionally read existing data by `owner_id` from `definition_index_view` and one insert into `temporal_constraints` as an attempt to guarantee a total order of create/update operations by `owner_id` 
  2) One akka-sharding clustered RTT to perform `Conditional Put` 
 
+
+### I-offender 
+Operations that may break app level invariants when executed concurrently.
+
+### Create
+
+1) `OwnerId(1)` attempt to obtain definition=`a` and definition=`b` at the same time  
+   Create(ownerId(1), definition=a) <> Create(ownerId(1), definition=b)
+
+2) `OwnerId(1)` and `OwnerId(2)` attempt to obtain definition=`a` at the same time
+   Create(ownerId(1), definition=a) <> Create(ownerId(2), definition=a)
+
+### Update
+    
+1) `OwnerId(1)` attempts to update definition=`a` to definition=`b` from different clients at the same time
+2) `OwnerId(1)` attempts to update definition=`a` to definition=`b` and definition=`a` to definition=`c` from different clients at the same time
 
 ```
 create DATABASE udefinitions
@@ -82,35 +88,50 @@ grpcurl -d '{"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.
 
 
 
-## Reproduce Create|Update conflicts
+## Reproduce Create conflicts
+
+Create conflict1: `OwnerId(1)` attempt to obtain `definition=a` and `definition=b` at the same time from different clients
 
 ```
-
-Create conflict
-
-// Thread.sleep(3_000) for local testing
-
-grpcurl -d '{"definition":{"name":"aff645a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"bff645b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-
-
-```
-
-
-
-```
-
-Update conflict
-
-// Thread.sleep(3_000) for local testing
-
-grpcurl -d '{"definition":{"name":"bbbff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-
-grpcurl -d '{"definition":{"name":"xff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"3958406442293610682","seqNum":"1"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"zff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"3958406442293610682","seqNum":"1"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
  
+grpcurl -d '{"definition":{"name":"ff645a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 ```
+
+Create conflict2: `OwnerId(1)` and `OwnerId(2)` attempt to obtain `definition=a` at the same time from different clients
+
+```
+  
+grpcurl -d '{"definition":{"name":"cff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96483" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"cff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96484" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+
+```
+
+
+Update conflict1: `OwnerId(1)` attempt to update definition=`a` to definition=`b` from different clients at the same time
+```
+grpcurl -d '{"definition":{"name":"af64567868","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96488" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+grpcurl -d '{"definition":{"name":"af64567868a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96488","location":{"bucketId":"-3052600320989721612","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"af64567868a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96488","location":{"bucketId":"-3052600320989721612","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+ 
+```
+
+
+Update conflict2: `OwnerId(1)` attempts to update definition=`a` to definition=`b` and definition=`a` to definition=`c` from different clients at the same time
+``` 
+grpcurl -d '{"definition":{"name":"ccf64567868","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+grpcurl -d '{"definition":{"name":"ccf64567868a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"2820986158190524712","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ccf64567868b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"2820986158190524712","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+
+`OwnerId(1)` attempt to update definition to `definition=a` and `definition=b` at the same time from different clients
+
+```
+
 
 ```
 TRUNCATE table akka_projection_management;
@@ -121,11 +142,6 @@ DELETE FROM event_journal;
 DROP TABLE definition_index_view;
 ```
 
-
-TODO:
-1) pekko.persistence.r2dbc.journal.publish-events = on
-2)At least once delivery instead of db locking 
-                                    
 
 ### Links
 

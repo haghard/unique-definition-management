@@ -1,6 +1,6 @@
 ThisBuild / version := "0.1.0"
 
-ThisBuild / scalaVersion := "2.13.16"
+ThisBuild / scalaVersion := "2.13.17"
 
 val AkkaVersion = "2.6.21"
 val akkaMngVersion  = "1.1.4"
@@ -22,7 +22,7 @@ lazy val root = (project in file("."))
   )
   .enablePlugins(AkkaGrpcPlugin)
 
-val AmmoniteVersion = "3.0.2"
+val AmmoniteVersion = "3.0.3"
 
 
 val akkaPersistenceJdbcV = "5.0.4"
@@ -46,7 +46,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.management" %% "akka-management-cluster-http" % akkaMngVersion,
 
 
-  "ch.qos.logback" % "logback-classic" % "1.5.18",
+  "ch.qos.logback" % "logback-classic" % "1.5.21",
   "org.slf4j"      % "slf4j-api"       %  "2.0.17",
 
   //transport = aeron-udp

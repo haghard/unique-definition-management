@@ -20,9 +20,10 @@ final class DefinitionServiceImpl(
   implicit val sch: Scheduler                = system.scheduler
   implicit val askTimeout: akka.util.Timeout = Guardian.askTo
   implicit val ec: ExecutionContext          = system.executionContext
+  val lockTTL: Long                          = Guardian.askTo.duration.toMillis * 3
 
   override def conditionalPut(in: PutRequest): Future[PutReply] =
-    in.definitionLocation match {
+    in.location match {
       case None =>
         create(in)
       case Some(_) =>
@@ -32,19 +33,17 @@ final class DefinitionServiceImpl(
   override def getDefinitionLocation(in: GetDefinitionLocationRequest): Future[GetDefinitionLocationReply] =
     Tables.definitionIndexView
       .getLocationDefinition(UUID.fromString(in.ownerId))
-      .map { rows =>
-        rows.size match {
-          case 0 => GetDefinitionLocationReply(None, None)
-          case 1 =>
-            val (entityId, seqNum, definition) = rows.head
-            GetDefinitionLocationReply(Some(DefinitionLocation(entityId, seqNum)), Some(definition))
-          case _ =>
-            GetDefinitionLocationReply(Some(DefinitionLocation(-1, -1)), None)
-        }
+      .map {
+        case None      => GetDefinitionLocationReply(None, None)
+        case Some(row) =>
+          val (bucketId, seqNum, definition) = row
+          GetDefinitionLocationReply(Some(DefinitionLocation(bucketId, seqNum)), Some(definition))
+        case _ =>
+          GetDefinitionLocationReply(Some(DefinitionLocation(-1, -1)), None)
       }
 
   def create(in: PutRequest) =
-    Tables.create(in) { in =>
+    Tables.create(in, lockTTL) { in =>
       takenDefinitions
         .askWithStatus[PutReply] { askReplyTo =>
           Create(
@@ -64,7 +63,7 @@ final class DefinitionServiceImpl(
     }(ec)
 
   def update(in: PutRequest) =
-    Tables.withUpdateLock(in) { (in, prevDefinitionLocation) =>
+    Tables.update(in, lockTTL) { (in, currentLocation) =>
       takenDefinitions
         .askWithStatus[PutReply] { replyTo =>
           Update(
@@ -78,7 +77,7 @@ final class DefinitionServiceImpl(
               in.definition.zipCode,
               in.definition.brand
             ),
-            prevDefinitionLocation,
+            currentLocation,
             actorRefResolver.toSerializationFormat(replyTo)
           )
         }
