@@ -2,11 +2,30 @@ ThisBuild / version := "0.1.0"
 
 ThisBuild / scalaVersion := "2.13.17"
 
+/*
 val AkkaVersion = "2.6.21"
 val akkaMngVersion  = "1.1.4"
 val AkkaHttpVersion = "10.2.10"
-val typesafeConfigVersion = "1.4.2"
 val AkkaProjectionVersion = "1.2.5" //"1.3.0"
+val AkkaPersistenceJdbcV = "5.0.4"
+val AkkaProjectionVersion = "1.2.5"
+
+*/
+
+
+
+/*
+Akka-2.7.0(22.10)
+https://doc.akka.io/reference/release-notes/
+*/
+
+val AkkaVersion = "2.7.0"
+val AkkaHttpVersion = "10.4.0"
+val AkkaManagementVersion = "1.2.0"
+val AkkaPersistenceJdbcV = "5.2.0"
+val AkkaPersistenceR2dbcVersion = "1.0.1"
+val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0")
+
 
 lazy val java17Settings = Seq(
   "--add-opens",
@@ -25,9 +44,6 @@ lazy val root = (project in file("."))
 val AmmoniteVersion = "3.0.3"
 
 
-val akkaPersistenceJdbcV = "5.0.4"
-val projectionV = "1.2.5"
-
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-slf4j"  % AkkaVersion,
   "com.typesafe.akka" %% "akka-persistence-typed"       % AkkaVersion,
@@ -42,8 +58,8 @@ libraryDependencies ++= Seq(
   "org.hdrhistogram" % "HdrHistogram" % "2.2.2",
 
   "com.typesafe.akka"             %% "akka-discovery"               % AkkaVersion,
-  "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % akkaMngVersion,
-  "com.lightbend.akka.management" %% "akka-management-cluster-http" % akkaMngVersion,
+  "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
+  "com.lightbend.akka.management" %% "akka-management-cluster-http" % AkkaManagementVersion,
 
 
   "ch.qos.logback" % "logback-classic" % "1.5.21",
@@ -56,10 +72,10 @@ libraryDependencies ++= Seq(
   //"org.wvlet.airframe" %% "airframe-ulid" % "2025.1.14",
 
   "mysql" % "mysql-connector-java" % "8.0.33",
-  "com.lightbend.akka" %% "akka-persistence-jdbc" % akkaPersistenceJdbcV,
+  "com.lightbend.akka" %% "akka-persistence-jdbc" % AkkaPersistenceJdbcV,
 
-  "com.lightbend.akka" %% "akka-projection-eventsourced" % projectionV,
-  "com.lightbend.akka" %% "akka-projection-slick" % projectionV,
+  "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
+  "com.lightbend.akka" %% "akka-projection-slick" % AkkaProjectionVersion,
 
   //"com.github.jaceksokol" %% "akka-stream-map-async-partition" % "1.0.3",
   "com.lihaoyi" % "ammonite" % AmmoniteVersion % "test" cross CrossVersion.full
@@ -99,7 +115,6 @@ run / fork := false
 //Global / cancelable := false // ctrl-c
 
 dependencyOverrides ++= Seq(
-  "com.typesafe"      %  "config"                       % typesafeConfigVersion,
   "com.typesafe.akka" %% "akka-actor-typed"             % AkkaVersion,
   "com.typesafe.akka" %% "akka-protobuf"                % AkkaVersion,
   "com.typesafe.akka" %% "akka-protobuf-v3"             % AkkaVersion,
