@@ -75,19 +75,14 @@ final class CustomClusterShardingMessageSerializer(system: ExtendedActorSystem)
           // Using.resource(new ByteBufferOutputStream(directBuf))(actorRefMessageToProto(coordinator).writeTo(_))
           case m: ShardHome =>
             Using.resource(out)(shardHomeToProto(m).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(shardHomeToProto(m).writeTo(_))
           case m: ShardHomes =>
             Using.resource(out)(shardHomesToProto(m).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(shardHomesToProto(m).writeTo(_))
           case HostShard(shard) =>
             Using.resource(out)(shardIdMessageToProto(shard).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(shardIdMessageToProto(shard).writeTo(_))
           case ShardStarted(shard) =>
             Using.resource(out)(shardIdMessageToProto(shard).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(shardIdMessageToProto(shard).writeTo(_))
           case BeginHandOff(shard) =>
             Using.resource(out)(shardIdMessageToProto(shard).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(shardIdMessageToProto(shard).writeTo(_))
           case HandOff(shard) =>
             Using.resource(out)(shardIdMessageToProto(shard).writeTo(_))
           // Using.resource(new ByteBufferOutputStream(directBuf))(shardIdMessageToProto(shard).writeTo(_))
@@ -99,34 +94,19 @@ final class CustomClusterShardingMessageSerializer(system: ExtendedActorSystem)
           // Using.resource(new ByteBufferOutputStream(directBuf))(actorRefMessageToProto(shardRegion).writeTo(_))
           case RegisterProxy(shardRegionProxy) =>
             Using.resource(out)(actorRefMessageToProto(shardRegionProxy).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(actorRefMessageToProto(shardRegionProxy).writeTo(_))
           case GetShardHome(shard) =>
             Using.resource(out)(shardIdMessageToProto(shard).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(shardIdMessageToProto(shard).writeTo(_))
           case BeginHandOffAck(shard) =>
             Using.resource(out)(shardIdMessageToProto(shard).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(shardIdMessageToProto(shard).writeTo(_))
           case ShardStopped(shard) =>
             Using.resource(out)(shardIdMessageToProto(shard).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(shardIdMessageToProto(shard).writeTo(_))
           case RegionStopped(shardRegion) =>
             Using.resource(out)(actorRefMessageToProto(shardRegion).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(actorRefMessageToProto(shardRegion).writeTo(_))
           case GracefulShutdownReq(shardRegion) =>
             Using.resource(out)(actorRefMessageToProto(shardRegion).writeTo(_))
-          // Using.resource(new ByteBufferOutputStream(directBuf))(actorRefMessageToProto(shardRegion).writeTo(_))
         }
 
       case state: akka.cluster.sharding.ShardCoordinator.Internal.State =>
-        /** On-line shards
-          *
-          * Size: 1 shard takes 195 bts, 2 shards takes 263 bts, 3 shards takes 333 bts
-          *
-          * ~ 70 bytes per shard.
-          *
-          * 100 - 7_000 bts - 7 KB 1000 - 70_000 bts - 70 KB 2000 - 140_000 bts - 140 KB 4000 - 280_000 bts - 280 KB
-          * 8000 - 560_000 bts - 560 KB 12000 - 1120_000 bts - 1 Mb
-          */
         Using.resource(CodedOutputStream.newInstance(directBuf)) { cos =>
           val pbState = coordinatorStateToProto(state)
           system.log.warning("toBinary.ShardCoordinatorState: {} bts", pbState.getSerializedSize)
@@ -134,7 +114,6 @@ final class CustomClusterShardingMessageSerializer(system: ExtendedActorSystem)
         }
       // Using.resource(new ByteBufferOutputStream(directBuf))(cState.writeTo(_))
 
-      // TODO: Gives some useful insights
       case ev: DomainEvent =>
         ev match {
           case ShardRegionRegistered(region) =>

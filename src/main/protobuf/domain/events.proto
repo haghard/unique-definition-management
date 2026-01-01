@@ -26,17 +26,28 @@ message Acquired {
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
   int64 seq_num = 3;
-
-  //Release DefinitionLocation
-  DefinitionLocation prev_definition_location = 4;
+  DefinitionLocation released_location = 4;
 }
 
 message Released {
   option (scalapb.message).extends = "Event";
   string owner_id = 1;
-  DefinitionLocation prev_definition_location = 2 [(scalapb.field).no_box = true];
-  Definition definition = 3 [(scalapb.field).no_box = true];
-
-  int64 acquired_seq_num = 4;
-  int64 acquired_bucket_id = 5;
+  DefinitionLocation released_location = 2 [(scalapb.field).no_box = true];
+  
+  Definition acquired_definition = 3 [(scalapb.field).no_box = true];
+  DefinitionLocation acquired_location = 4 [(scalapb.field).no_box = true];
 }
+
+
+enum ConflictTag {
+  Unspecified = 0;
+  Update = 1;
+  Create = 2;
+}
+
+message ConflictDetected {
+  option (scalapb.message).extends = "Event";
+  ConflictTag conflict_tag = 1;
+  string owner_id = 2;
+}
+

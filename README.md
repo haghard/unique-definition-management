@@ -19,9 +19,9 @@ It is a relative order invariant. Acquiring a new definition requires condition 
 Causal ordering if enough to guarantee that we never violate it.
 
 
-### Write path
- 1) One database RTT to transactionally read existing data by `owner_id` from `definition_index_view` and one insert into `temporal_constraints` as an attempt to guarantee a total order of create/update operations by `owner_id` 
- 2) One akka-sharding clustered RTT to perform `Conditional Put` 
+### Write path (Update)
+ 1) One database RTT (read-modify-write) to read existing data by `owner_id` from `definition_index_view` and update  it (set is_locker=true)
+ 2) One clustered RTT to perform `ConditionalPut` 
 
 
 ### I-offender 
@@ -86,49 +86,103 @@ grpcurl -d '{"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.
 
 ```
 
+```
+   lock(OwnerId) {
+      lock(Old_Definition) {
+         create_if_not_exist (New_Definition)
+         release(Old_Definition)
+      }
+   }
+
+```
 
 
 ## Reproduce Create conflicts
 
-Create conflict1: `OwnerId(1)` attempt to obtain `definition=a` and `definition=b` at the same time from different clients
+Create conflict1: `OwnerId(1)` attempt to obtain `definition=ff645a` and `definition=ff645b` at the same time from different clients (contention on `OwnerId(1)`)
 
 ```
  
-grpcurl -d '{"definition":{"name":"ff645a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff645b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96481"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff645b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96481"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 ```
 
-Create conflict2: `OwnerId(1)` and `OwnerId(2)` attempt to obtain `definition=a` at the same time from different clients
+Create conflict2: `OwnerId(1)` and `OwnerId(2)` attempt to obtain `definition=cff645` at the same time from different clients (Contention on `definition=cff645`)
 
 ```
   
 grpcurl -d '{"definition":{"name":"cff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96483" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 grpcurl -d '{"definition":{"name":"cff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96484" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
-
 ```
 
 
-Update conflict1: `OwnerId(1)` attempt to update definition=`a` to definition=`b` from different clients at the same time
-```
-grpcurl -d '{"definition":{"name":"af64567868","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96488" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+## Update conflicts
 
-grpcurl -d '{"definition":{"name":"af64567868a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96488","location":{"bucketId":"-3052600320989721612","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"af64567868a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96488","location":{"bucketId":"-3052600320989721612","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+Conflict #1: `OwnerId(1)` attempt to update definition=`aa` to definition=`bb` from different clients at the same time causing contention on `OwnerId(1)`
+
+```
+grpcurl -d '{"definition":{"name":"aa","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96486" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+grpcurl -d '{"definition":{"name":"bb","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96486","location":{"bucketId":"852982107908317497","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"bb","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96486","location":{"bucketId":"852982107908317497","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
  
 ```
 
 
-Update conflict2: `OwnerId(1)` attempts to update definition=`a` to definition=`b` and definition=`a` to definition=`c` from different clients at the same time
+Conflict #2: `OwnerId(1)` attempts to update definition=`ccf64567868a` to definition=`ccf64567868b` and definition=`a` to definition=`c` from different clients at the same time  causing contention on `OwnerId(1)`
+
 ``` 
+
 grpcurl -d '{"definition":{"name":"ccf64567868","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 grpcurl -d '{"definition":{"name":"ccf64567868a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"2820986158190524712","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 grpcurl -d '{"definition":{"name":"ccf64567868b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"2820986158190524712","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
+`OwnerId(1)` attempt to update definition to `definition=a` and `definition=b` at the same time from different clients
+
+```
+
+Conflict #3: 
+   `OwnerId(1)` attempts to update its definition to `ccf64567868b` while `OwnerId(2)` attempts to update its definition to the same value 
+   and at the same time causing contention on definition(`cc645697`)
+
+
+```
+
+grpcurl -d '{"definition":{"name":"aaf645699","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96471" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"bbf645698","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96472" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+
+grpcurl -d '{"definition":{"name":"cc645697","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96471","location":{"bucketId":"2911202068030624907","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"cc645697","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96472","location":{"bucketId":"-4366455400474742120","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
 
 `OwnerId(1)` attempt to update definition to `definition=a` and `definition=b` at the same time from different clients
+
+```
+
+        
+
+Create/Update conflicts
+
+```
+
+grpcurl -d '{"definition":{"name":"a","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96482" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+
+grpcurl -d '{"definition":{"name":"b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96482","location":{"bucketId":"-5157777011468103420","seqNum": "1"}}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+grpcurl -d '{"definition":{"name":"b","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96485"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+
+```
+
+
+  
+```
+grpcurl -d '{"ownerId":"211367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/GetDefinitionLocation
 
 ```
 

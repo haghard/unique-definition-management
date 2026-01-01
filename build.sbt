@@ -1,18 +1,6 @@
 ThisBuild / version := "0.1.0"
 
-ThisBuild / scalaVersion := "2.13.17"
-
-/*
-val AkkaVersion = "2.6.21"
-val akkaMngVersion  = "1.1.4"
-val AkkaHttpVersion = "10.2.10"
-val AkkaProjectionVersion = "1.2.5" //"1.3.0"
-val AkkaPersistenceJdbcV = "5.0.4"
-val AkkaProjectionVersion = "1.2.5"
-
-*/
-
-
+ThisBuild / scalaVersion := "2.13.18"
 
 /*
 Akka-2.7.0(22.10)
@@ -23,9 +11,8 @@ val AkkaVersion = "2.7.0"
 val AkkaHttpVersion = "10.4.0"
 val AkkaManagementVersion = "1.2.0"
 val AkkaPersistenceJdbcV = "5.2.0"
-val AkkaPersistenceR2dbcVersion = "1.0.1"
+val AkkaPersistenceR2dbcVersion = "1.0.0"
 val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0")
-
 
 lazy val java17Settings = Seq(
   "--add-opens",
@@ -41,8 +28,9 @@ lazy val root = (project in file("."))
   )
   .enablePlugins(AkkaGrpcPlugin)
 
-val AmmoniteVersion = "3.0.3"
-
+//https://mvnrepository.com/artifact/com.lihaoyi/ammonite
+//https://github.com/com-lihaoyi/Ammonite/releases
+val AmmoniteVersion = "3.0.5"
 
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-slf4j"  % AkkaVersion,
@@ -62,10 +50,9 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.management" %% "akka-management-cluster-http" % AkkaManagementVersion,
 
 
-  "ch.qos.logback" % "logback-classic" % "1.5.21",
+  "ch.qos.logback" % "logback-classic" % "1.5.23",
   "org.slf4j"      % "slf4j-api"       %  "2.0.17",
 
-  //transport = aeron-udp
   "io.aeron" % "aeron-driver" % "1.46.9", //1.47.0
   "io.aeron" % "aeron-client" % "1.46.9",
 

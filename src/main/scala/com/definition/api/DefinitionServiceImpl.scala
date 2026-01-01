@@ -12,15 +12,13 @@ import java.util.UUID
 
 final class DefinitionServiceImpl(
   takenDefinitions: ActorRef[Cmd]
-)(implicit system: ActorSystem[_])
+)(implicit system: ActorSystem[_], timeout: akka.util.Timeout)
     extends DefinitionService {
 
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
-  implicit val sch: Scheduler                = system.scheduler
-  implicit val askTimeout: akka.util.Timeout = Guardian.askTo
-  implicit val ec: ExecutionContext          = system.executionContext
-  val lockTTL: Long                          = Guardian.askTo.duration.toMillis * 3
+  implicit val sch: Scheduler       = system.scheduler
+  implicit val ec: ExecutionContext = system.executionContext
 
   override def conditionalPut(in: PutRequest): Future[PutReply] =
     in.location match {
@@ -31,21 +29,21 @@ final class DefinitionServiceImpl(
     }
 
   override def getDefinitionLocation(in: GetDefinitionLocationRequest): Future[GetDefinitionLocationReply] =
-    Tables.definitionIndexView
+    Tables.definitions
       .getLocationDefinition(UUID.fromString(in.ownerId))
       .map {
         case None      => GetDefinitionLocationReply(None, None)
         case Some(row) =>
-          val (bucketId, seqNum, definition) = row
-          GetDefinitionLocationReply(Some(DefinitionLocation(bucketId, seqNum)), Some(definition))
+          val (hashBucketId, seqNum, definition) = row
+          GetDefinitionLocationReply(Some(DefinitionLocation(hashBucketId, seqNum)), Some(definition))
         case _ =>
           GetDefinitionLocationReply(Some(DefinitionLocation(-1, -1)), None)
       }
 
   def create(in: PutRequest) =
-    Tables.create(in, lockTTL) { in =>
+    Tables.create(in) { in =>
       takenDefinitions
-        .askWithStatus[PutReply] { askReplyTo =>
+        .askWithStatus[PutReply] { replyTo =>
           Create(
             in.ownerId,
             Definition(
@@ -57,13 +55,13 @@ final class DefinitionServiceImpl(
               in.definition.zipCode,
               in.definition.brand
             ),
-            actorRefResolver.toSerializationFormat(askReplyTo)
-          )
+            actorRefResolver.toSerializationFormat(replyTo)
+          ) // .withReplyTo(replyTo)
         }
-    }(ec)
+    }
 
   def update(in: PutRequest) =
-    Tables.update(in, lockTTL) { (in, currentLocation) =>
+    Tables.update(in) { (in, currentLocation) =>
       takenDefinitions
         .askWithStatus[PutReply] { replyTo =>
           Update(
@@ -82,25 +80,4 @@ final class DefinitionServiceImpl(
           )
         }
     }
-
-  /*def update(in: PutRequest) =
-    Tables.lockFreeStatusUpdate(in) { (in, prevDefinitionLocation) =>
-      takenDefinitions
-        .askWithStatus[PutReply] { replyTo =>
-          Update(
-            in.ownerId,
-            Definition(
-              in.definition.name,
-              in.definition.address,
-              in.definition.city,
-              in.definition.country,
-              in.definition.state,
-              in.definition.zipCode,
-              in.definition.brand
-            ),
-            prevDefinitionLocation,
-            actorRefResolver.toSerializationFormat(replyTo)
-          )
-        }
-    }*/
 }

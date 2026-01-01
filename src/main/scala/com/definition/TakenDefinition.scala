@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets
 
 object TakenDefinition {
 
-  val TypeKey: EntityTypeKey[Cmd] = EntityTypeKey[Cmd](name = "tkn-dfn")
+  val TypeKey: EntityTypeKey[Cmd] = EntityTypeKey[Cmd](name = "taken-dfn")
 
   object Extractor {
     def apply(numberOfShards: Int): ShardingMessageExtractor[Cmd, Cmd] =
@@ -34,7 +34,7 @@ object TakenDefinition {
             case Update(_, definition, _, _) =>
               val bts = ByteBuffer.wrap(definition.contentKey.getBytes(StandardCharsets.UTF_8))
               CassandraMurmurHash.hash2_64(bts, 0, bts.array.length, akka.util.HashCode.SEED).toString
-            case Replace(_, _, _, _, prevDefinitionLocation, _) =>
+            case Replace(_, _, _, prevDefinitionLocation, _) =>
               prevDefinitionLocation.bucketId.toString
             case Passivate() =>
               throw new Exception(s"Unsupported Passivate()")
@@ -47,9 +47,9 @@ object TakenDefinition {
       }
   }
 
-  def apply(entityCtx: EntityContext[Cmd], snapshotEveryNEvents: Int = 5): Behavior[Cmd] =
+  def apply(entityCtx: EntityContext[Cmd], numberOfTags: Int, snapshotEveryNEvents: Int): Behavior[Cmd] =
     Behaviors.setup { implicit ctx =>
-      implicit val refResolver: ActorRefResolver = ActorRefResolver(ctx.system)
+      implicit val resolver: ActorRefResolver = ActorRefResolver(ctx.system)
 
       val path     = ctx.self.path
       val entityId = path.elements.last.toLong
@@ -61,7 +61,7 @@ object TakenDefinition {
           (state, cmd) => state.applyCmd(cmd, entityId),
           (state, event) => state.applyEvt(event)
         )
-        .withTagger(_ => Set(math.abs(entityId % Guardian.numberOfTags).toString))
+        .withTagger(_ => Set(math.abs(entityId % numberOfTags).toString))
         .snapshotWhen { case (_, _, sequenceNr) =>
           val ifSnap = sequenceNr % snapshotEveryNEvents == 0
           if (ifSnap)
@@ -92,18 +92,24 @@ object TakenDefinition {
     )(implicit ctx: ActorContext[Cmd], resolver: ActorRefResolver): ReplyEffect[Event, TakenDefinitionState] =
       cmd match {
         case Create(ownerId, definition, replyTo) =>
-          ctx.log.info(s"★★★> Create ${definition.name} to $ownerId")
-          Thread.sleep(3_000) // for local testing
+          // ctx.log.info(s"★★★> Create ${definition.name} to $ownerId")
+          // Thread.sleep(1_500) // for local testing
 
           pbState.contentKeySeqNum.get(definition.contentKey) match {
             case Some(seqNum) =>
               Effect
-                .none[Event, TakenDefinitionState]
+                .persist(ConflictDetected(ConflictTag.Create, ownerId))
                 .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
-                  ctx.log.warn("Already reserved")
-                  StatusReply.success(
-                    PutReply(ownerId, PutReply.StatusCode.Reserved, DefinitionLocation(entityId, seqNum))
-                  )
+                  if (pbState.ownerId.exists(_ == ownerId))
+                    StatusReply.success(
+                      PutReply(ownerId, PutReply.StatusCode.OKNoOp, DefinitionLocation(entityId, seqNum))
+                    )
+                  else {
+                    ctx.log.warn(s"Create conflict: already reserved by another owner ${pbState.ownerId}")
+                    StatusReply.success(
+                      PutReply(ownerId, PutReply.StatusCode.Reserved, DefinitionLocation(entityId, seqNum))
+                    )
+                  }
                 }
             case None =>
               val nextSeqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
@@ -121,29 +127,32 @@ object TakenDefinition {
                 }
           }
 
-        case Update(ownerId, definition, prevDefinitionLocation, replyTo) =>
-          ctx.log.info(s"★★★> Update ${definition.name}  OwnerId:$ownerId")
-          Thread.sleep(3_000) // for local testing
+        case Update(ownerId, definition, releasedLocation, replyTo) =>
+          // ctx.log.info(s"★★★> Update ${definition.name}  OwnerId:$ownerId")
+          // Thread.sleep(1_500) // for local testing
 
           pbState.contentKeySeqNum.get(definition.contentKey) match {
             case Some(seqNum) =>
               Effect
-                .none[Event, TakenDefinitionState]
+                .persist(ConflictDetected(ConflictTag.Update, ownerId))
                 .thenReply(resolver.resolveActorRef(replyTo)) { _: TakenDefinitionState =>
-                  ctx.log.warn("Already reserved")
-                  StatusReply.success(
-                    PutReply(
-                      ownerId,
-                      PutReply.StatusCode.Reserved,
-                      DefinitionLocation(entityId, seqNum)
+                  if (pbState.ownerId.exists(_ == ownerId)) {
+                    StatusReply.success(
+                      PutReply(ownerId, PutReply.StatusCode.OKNoOp, DefinitionLocation(entityId, seqNum))
                     )
-                  )
+                  } else {
+                    ctx.log.warn(s"Update conflict: Already reserved by another owner ${pbState.ownerId}")
+                    StatusReply.success(
+                      PutReply(ownerId, PutReply.StatusCode.Reserved, DefinitionLocation(entityId, seqNum))
+                    )
+                  }
                 }
+
             case None =>
               val nextSeqNum = EventSourcedBehavior.lastSequenceNumber(ctx) + 1
               Effect
                 .persist(
-                  Acquired(ownerId, definition, nextSeqNum, Some(prevDefinitionLocation))
+                  Acquired(ownerId, definition, nextSeqNum, Some(releasedLocation))
                 )
                 .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
                   StatusReply.success(
@@ -156,15 +165,28 @@ object TakenDefinition {
                 }
           }
 
-        case Replace(ownerId, definition, acquiredSeqNum, acquiredBucketId, prevDefinitionLocation, replyTo) =>
+        case Replace(
+              ownerId,
+              definition,
+              acquiredLocation,
+              releasedLocation,
+              replyTo
+            ) =>
           pbState.contentKeySeqNum.collectFirst {
-            case (_, seqNum) if seqNum == prevDefinitionLocation.seqNum => seqNum
+            case (_, seqNum) if seqNum == releasedLocation.seqNum => seqNum
           } match {
             case Some(seqNum) =>
               Effect
-                .persist(Released(ownerId, prevDefinitionLocation, definition, acquiredSeqNum, acquiredBucketId))
+                .persist(
+                  Released(
+                    ownerId,
+                    releasedLocation,
+                    definition,
+                    acquiredLocation
+                  )
+                )
                 .thenReply(resolver.resolveActorRef(replyTo)) { _ =>
-                  ctx.log.warn(s"Released($ownerId:${seqNum})")
+                  ctx.log.warn(s"Released($ownerId:$seqNum)")
                   StatusReply.success(Done)
                 }
 
@@ -188,11 +210,16 @@ object TakenDefinition {
     def applyEvt(event: Event)(implicit ctx: ActorContext[Cmd]): TakenDefinitionState =
       event match {
         case Acquired(ownerId, definition, seqNum, _) =>
-          ctx.log.info("Acquired: {} by {}/{}", definition.name, ownerId, seqNum)
-          // TODO: contentKeySeqNum - Use off-heap maps from one-nio
-          val updatedIndex = pbState.contentKeySeqNum + (definition.contentKey -> seqNum)
-          pbState.update(_.contentKeySeqNum := updatedIndex)
-        case Released(ownerId, prevDefinitionLocation, _, _, _) =>
+          ctx.log.info("Acquired({}) by {}/{}", definition.name, ownerId, seqNum)
+
+          val updated = pbState.contentKeySeqNum + (definition.contentKey -> seqNum)
+          pbState
+            .update(
+              _.contentKeySeqNum := updated,
+              _.optionalOwnerId  := Some(ownerId)
+            )
+
+        case Released(ownerId, prevDefinitionLocation, _, _) =>
           val definitionContentKey =
             pbState.contentKeySeqNum
               .collectFirst {
@@ -201,10 +228,15 @@ object TakenDefinition {
               }
               .getOrElse("n")
 
-          ctx.log.info("Released:{} by {}/{}", definitionContentKey, ownerId, prevDefinitionLocation.seqNum)
-          val updatedIndex = pbState.contentKeySeqNum - definitionContentKey
-          pbState.update(_.contentKeySeqNum := updatedIndex)
+          ctx.log.info("Released({}) from {}/{}", definitionContentKey, ownerId, prevDefinitionLocation.seqNum)
+          val updated = pbState.contentKeySeqNum - definitionContentKey
+          pbState.update(
+            _.contentKeySeqNum := updated,
+            _.optionalOwnerId  := None
+          )
 
+        case _: ConflictDetected =>
+          pbState
       }
   }
 }

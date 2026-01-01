@@ -33,25 +33,21 @@ message Update {
   option (scalapb.message).extends = "Cmd";
 
   string owner_id = 1;
-  Definition new_definition = 2 [(scalapb.field).no_box = true];
-  DefinitionLocation prev_definition_location = 3 [(scalapb.field).no_box = true];
-  string replyTo = 5;
+  Definition definition = 2 [(scalapb.field).no_box = true];
+  DefinitionLocation released_location = 3 [(scalapb.field).no_box = true];
+  string replyTo = 4;
 }
 
 message Replace {
   option (scalapb.message).extends = "Cmd";
-
-  // current
+  
   string owner_id = 1;
   Definition definition = 2 [(scalapb.field).no_box = true];
 
-  int64 acquired_seq_num = 3;
-  int64 acquired_bucket_id = 4;
+  DefinitionLocation acquired_location = 3 [(scalapb.field).no_box = true];
+  DefinitionLocation released_location = 4 [(scalapb.field).no_box = true];
 
-  // prev
-  DefinitionLocation prev_definition_location = 5 [(scalapb.field).no_box = true];
-
-  string replyTo = 6;
+  string replyTo = 5;
 }
 
 message Passivate {

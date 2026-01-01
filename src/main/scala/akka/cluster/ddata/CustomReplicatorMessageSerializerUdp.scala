@@ -32,18 +32,6 @@ final class CustomReplicatorMessageSerializerUdp(system: ExtendedActorSystem)
   private val writeAck = akka.cluster.ddata.protobuf.msg.ReplicatorMessages.Empty.getDefaultInstance
   private val empty    = writeAck.toByteArray
 
-  // override def toBinary(obj: AnyRef): Array[Byte] = super.toBinary(obj)
-
-  /*override def toBinary(obj: AnyRef): Array[Byte] =
-    obj match {
-      case d: akka.cluster.ddata.Replicator.Internal.DeltaPropagation ⇒
-        val bts = super.toBinary(obj)
-        //system.log.error(s"*** ToBinary:DeltaPropagation Keys:${d.deltas.keySet.size}. Size:${bts.length / KB} KB")
-        bts
-      case _ ⇒
-        super.toBinary(obj)
-    }*/
-
   // Artery introduces a new serialization mechanism which allows the ByteBufferSerializer to directly write into a shared java.nio.ByteBuffer
   // instead of being forced to allocate and return an Array[Byte] for each serialized message.
   override def toBinary(replicatorMsg: AnyRef, directByteBuffer: ByteBuffer): Unit =

@@ -26,6 +26,10 @@ final class CRDTSerializer(system: ExtendedActorSystem)
         system.log.warning("ORSet({})", orSet.elements.mkString(","))
         super.toBinary(orSet)
 
+      case oRMultiMap: ORMultiMap[_, _] =>
+        system.log.warning("ORMultiMap({})", oRMultiMap.underlying.keys.elements.mkString(","))
+        super.toBinary(oRMultiMap)
+
       case crdt =>
         system.log.warning("Other CRDT {}", crdt)
         super.toBinary(obj)

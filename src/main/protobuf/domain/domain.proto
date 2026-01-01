@@ -14,6 +14,8 @@ package com.definition.domain;
 
 message TakenDefinitionState {
   map<string, int64> contentKeySeqNum=1;
+
+  optional string owner_id = 2;
   //repeated string content = 1 [(scalapb.field).collection_type = "scala.collection.immutable.Set" ];
 }
 

@@ -1,7 +1,7 @@
 package com.definition
 
 import akka.Done
-import akka.actor.typed.{ActorRef, ActorSystem}
+import akka.actor.typed.*
 import akka.actor.CoordinatedShutdown
 import akka.actor.CoordinatedShutdown.*
 import akka.http.scaladsl.Http
@@ -22,7 +22,7 @@ final case class Bootstrap(
   shardRegion: ActorRef[Cmd],
   bindHost: String,
   port: Int
-)(implicit system: ActorSystem[_]) {
+)(implicit system: ActorSystem[_], timeout: akka.util.Timeout) {
   import system.executionContext
 
   val config              = system.settings.config
@@ -31,7 +31,7 @@ final case class Bootstrap(
 
   val shutdown                                         = CoordinatedShutdown(system)
   val grpcService: HttpRequest => Future[HttpResponse] =
-    DefinitionServiceHandler.withServerReflection(new DefinitionServiceImpl(shardRegion)(system))
+    DefinitionServiceHandler.withServerReflection(new DefinitionServiceImpl(shardRegion))
 
   Http(system)
     .newServerAt(bindHost, port)

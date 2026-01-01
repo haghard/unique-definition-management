@@ -36,7 +36,7 @@ message GetDefinitionLocationReply {
 message PutRequest {
   string owner_id = 1;
   com.definition.domain.Definition definition = 2 [(scalapb.field).no_box = true];
-  com.definition.domain.DefinitionLocation location = 3; //acts as a causal_token
+  com.definition.domain.DefinitionLocation location = 3;
 }
 
 message PutReply {
@@ -48,14 +48,12 @@ message PutReply {
     Undefined = 0;
     OK = 1;
     OKNoOp = 2;
-    Reserved = 3;
-    NotFound = 4;
-    IllegalState = 5;
+    OwnerReserved = 3;
+    Reserved = 4;
+    OwnerNotFound = 5;
     LocationNotFound = 6;
     AnotherDefinitionFound = 7;
-    CreateConflict = 8;
-    UpdateConflict = 9;
-    UpdateFailure = 10;
-    ReadNoWaitNotFound = 11;
+    ConcurrentModification = 8;
+    UpdateFailure = 9;
   }
 }
