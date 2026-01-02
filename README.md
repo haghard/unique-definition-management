@@ -72,9 +72,13 @@ http GET 127.0.0.2:8079/definitions/cluster/shards
 http GET 127.0.0.2:8079/definitions/cluster/shards/tkn-dfn
 
 
+
+grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+
+
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"3341739074684379528","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"aas13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"6898668511187520942","seqNum":"1"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"ff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"3341739074684379528","seqNum":"1"},"ownerId":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
+grpcurl -d '{"definition":{"name":"aas13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"6898668511187520942","seqNum":"1"},"ownerId":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 
 grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
 grpcurl -d '{"definition":{"name":"ff6451324","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"3341739074684379528","seqNum":"3"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
@@ -97,7 +101,7 @@ grpcurl -d '{"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.
 ```
 
 
-## Reproduce Create conflicts
+## Create conflicts
 
 Create conflict1: `OwnerId(1)` attempt to obtain `definition=ff645a` and `definition=ff645b` at the same time from different clients (contention on `OwnerId(1)`)
 
@@ -120,7 +124,7 @@ grpcurl -d '{"definition":{"name":"cff645","address":"a","city":"FL","state":"FL
 
 ## Update conflicts
 
-Conflict #1: `OwnerId(1)` attempt to update definition=`aa` to definition=`bb` from different clients at the same time causing contention on `OwnerId(1)`
+Conflict #1: `OwnerId(1)` attempt to update definition=`aa` to definition=`bb` from different clients at the same time
 
 ```
 grpcurl -d '{"definition":{"name":"aa","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"211367c3-9ad3-47ef-a6b0-784d52c96486" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
@@ -131,7 +135,9 @@ grpcurl -d '{"definition":{"name":"bb","address":"a","city":"FL","state":"FL","c
 ```
 
 
-Conflict #2: `OwnerId(1)` attempts to update definition=`ccf64567868a` to definition=`ccf64567868b` and definition=`a` to definition=`c` from different clients at the same time  causing contention on `OwnerId(1)`
+Conflict #2: 
+`OwnerId(1)` attempts to update definition=`ccf64567868` to definition=`ccf64567868a` and
+`OwnerId(1)` attempts to update definition=`ccf64567868` to definition=`ccf64567868b` at the same time
 
 ``` 
 
@@ -142,9 +148,12 @@ grpcurl -d '{"definition":{"name":"ccf64567868b","address":"a","city":"FL","stat
 
 `OwnerId(1)` attempt to update definition to `definition=a` and `definition=b` at the same time from different clients
 
+
 ```
 
-Conflict #3: 
+## Create/Update conflicts
+
+Conflict #1: 
    `OwnerId(1)` attempts to update its definition to `ccf64567868b` while `OwnerId(2)` attempts to update its definition to the same value 
    and at the same time causing contention on definition(`cc645697`)
 

@@ -91,11 +91,14 @@ object DefinitionProjection {
                         sequenceNr = acquired.seqNum,
                         ts = env.timestamp
                       )
-                    Tables.definitions.create(row)
+
+                    Tables.definitionTableByOwner(acquired.ownerId).create(row)
                 }
 
               case conflict: ConflictDetected =>
-                Tables.definitions.release(UUID.fromString(conflict.ownerId), conflict.conflictTag)
+                Tables
+                  .definitionTableByOwner(conflict.ownerId)
+                  .release(UUID.fromString(conflict.ownerId), conflict.conflictTag)
 
               case released: Released =>
                 val row =
@@ -109,7 +112,9 @@ object DefinitionProjection {
                   )
 
                 // Thread.sleep(15_000)
-                Tables.definitions.update(row)
+                Tables
+                  .definitionTableByOwner(released.ownerId)
+                  .update(row)
 
             }).map(_ => Done)(ExecutionContext.parasitic)
       )
@@ -123,15 +128,6 @@ object DefinitionProjection {
     val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
     val tags     = Vector.tabulate(numberOfTags)(_.toString)
     val name     = "events"
-
-    /*ShardedDaemonProcess(system)
-      .init(
-        "owners",
-        3,
-        i => Owner(i),
-        ShardedDaemonProcessSettings(system),
-        Some(Owner.Stop)
-      )*/
 
     ShardedDaemonProcess(system)
       .init(

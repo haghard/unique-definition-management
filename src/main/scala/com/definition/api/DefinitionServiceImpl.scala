@@ -29,7 +29,8 @@ final class DefinitionServiceImpl(
     }
 
   override def getDefinitionLocation(in: GetDefinitionLocationRequest): Future[GetDefinitionLocationReply] =
-    Tables.definitions
+    Tables
+      .definitionTableByOwner(in.ownerId)
       .getLocationDefinition(UUID.fromString(in.ownerId))
       .map {
         case None      => GetDefinitionLocationReply(None, None)

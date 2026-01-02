@@ -52,7 +52,7 @@ object RequestTag {
   implicit object Update extends RequestTag(1)
 }
 
-final case class RequestRow(ownerId: UUID, request: PutRequest, tag: Int, when: Long)
+final case class PendingRequestRow(ownerId: UUID, request: PutRequest, tag: Int, when: Long)
 
 class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: ExecutionContext) {
 
@@ -72,7 +72,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
   ): BaseColumnType[T] =
     MappedColumnType.base((pb: T) => pb.toByteArray, (bts: Array[Byte]) => companion.parseFrom(bts))
 
-  class Definitions(tag: Tag) extends Table[DefinitionRow](tag, "definitions") {
+  class Definitions(tag: Tag, tableName: String) extends Table[DefinitionRow](tag, tableName) {
 
     // for debug only
     def name: Rep[String] = column[String]("NAME", O.Length(400))
@@ -87,16 +87,16 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
 
     def time: Rep[Long] = column[Long]("TIME")
 
-    def pk: slick.lifted.PrimaryKey = primaryKey("div__pk", (bucketId, sequenceNr))
+    def pk: slick.lifted.PrimaryKey = primaryKey(tableName + "__pk", (bucketId, sequenceNr))
 
-    def ownerIdIndex: slick.lifted.Index = index("div__owner_id_index", ownerId, unique = true)
+    def ownerIdIndex: slick.lifted.Index = index(tableName + "__owner_id_index", ownerId, unique = true)
 
     def * : slick.lifted.ProvenShape[DefinitionRow] =
       (name, definition, ownerId, bucketId, sequenceNr, time) <>
         ((DefinitionRow.apply _).tupled, DefinitionRow.unapply)
   }
 
-  object definitions extends TableQuery(new Definitions(_)) {
+  abstract class DefinitionTable(tableName: String) extends TableQuery(new Definitions(_, tableName)) {
     self =>
 
     val locationDefinition = Compiled { (ownerId: Rep[UUID]) =>
@@ -110,7 +110,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
 
     def create(row: DefinitionRow): Future[Int] = {
       val create         = self.insertOrUpdate(row)
-      val releaseRequest = requestsInFlight.filter(_.ownerId === row.ownerId).delete
+      val releaseRequest = pendingRequests.filter(_.ownerId === row.ownerId).delete
       db.run((create >> releaseRequest).transactionally)
     }
 
@@ -121,7 +121,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
           .map(rep => (rep.bucketId, rep.sequenceNr, rep.definition, rep.name, rep.time))
           .update((row.bucketId, row.sequenceNr, row.definition, row.name, row.ts))
 
-      val releaseRequest = requestsInFlight.filter(_.ownerId === row.ownerId).delete
+      val releaseRequest = pendingRequests.filter(_.ownerId === row.ownerId).delete
       db.run((update >> releaseRequest).transactionally)
     }
 
@@ -129,18 +129,18 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
       conflictTag match {
         case ConflictTag.Create =>
           db.run(
-            requestsInFlight.filter(rep => rep.ownerId === ownerId && rep.requestTag === RequestTag.Create.id).delete
+            pendingRequests.filter(rep => rep.ownerId === ownerId && rep.requestTag === RequestTag.Create.id).delete
           )
         case ConflictTag.Update =>
           db.run(
-            requestsInFlight.filter(rep => rep.ownerId === ownerId && rep.requestTag === RequestTag.Update.id).delete
+            pendingRequests.filter(rep => rep.ownerId === ownerId && rep.requestTag === RequestTag.Update.id).delete
           )
         case ConflictTag.Unspecified | ConflictTag.Unrecognized(_) =>
           Future.successful(-1)
       }
   }
 
-  class RequestInFlight(tag: Tag) extends Table[RequestRow](tag, "request_in_flight") {
+  class PendingRequest(tag: Tag) extends Table[PendingRequestRow](tag, "pending_requests") {
 
     def ownerId: Rep[UUID] = column[UUID]("OWNER_ID")
 
@@ -150,28 +150,28 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
 
     def when: Rep[Long] = column[Long]("WHEN")
 
-    def pk: slick.lifted.PrimaryKey = primaryKey("request_in_flight__pk_owner_id", ownerId)
+    def pk: slick.lifted.PrimaryKey = primaryKey("pending_request__pk_owner_id", ownerId)
 
-    def * : slick.lifted.ProvenShape[RequestRow] =
+    def * : slick.lifted.ProvenShape[PendingRequestRow] =
       (ownerId, request, requestTag, when) <>
-        ((RequestRow.apply _).tupled, RequestRow.unapply)
+        ((PendingRequestRow.apply _).tupled, PendingRequestRow.unapply)
   }
 
-  object requestsInFlight extends TableQuery(new RequestInFlight(_)) {
+  object pendingRequests extends TableQuery(new PendingRequest(_)) {
     self =>
 
-    def put[T <: RequestTag](
+    def initiate[T <: RequestTag](
       ownerId: UUID,
       request: PutRequest
     )(implicit requestTag: T): DBIO[RequestResult] =
       self
-        .filter(rep => rep.ownerId === ownerId)
+        .filter(_.ownerId === ownerId)
         .result
         .headOption
         .flatMap {
           case None =>
             self
-              .+=(RequestRow(ownerId, request, requestTag.id, System.currentTimeMillis()))
+              .+=(PendingRequestRow(ownerId, request, requestTag.id, System.currentTimeMillis()))
               .map(_ => RequestResult.Placed)
 
           case Some(existingRow) =>
@@ -194,13 +194,13 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
   )(ask: PutRequest => Future[PutReply]): Future[PutReply] = {
     val ownerId = UUID.fromString(in.ownerId)
     val dbio    =
-      definitions
+      definitionTableByOwner(in.ownerId)
         .locationDefinition(ownerId)
         .result
         .headOption
         .flatMap {
           case None =>
-            requestsInFlight.put[RequestTag.Create.type](ownerId, in)
+            pendingRequests.initiate[RequestTag.Create.type](ownerId, in)
 
           case Some(row) =>
             val (entityId, seqNum, definition) = row
@@ -275,7 +275,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
     val ownerId = UUID.fromString(in.ownerId)
 
     val dbio: DBIO[RequestResult] =
-      definitions
+      definitionTableByOwner(in.ownerId)
         .locationDefinition(ownerId)
         .result
         .headOption
@@ -290,7 +290,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
               if (in.definition == definition) {
                 DBIO.successful(RequestResult.Ok(currentLocation))
               } else {
-                requestsInFlight.put[RequestTag.Update.type](ownerId, in)
+                pendingRequests.initiate[RequestTag.Update.type](ownerId, in)
               }
             } else {
               DBIO.successful(RequestResult.LocationNotFound)
@@ -364,7 +364,8 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
       }
   }
 
-  val tables           = Seq(requestsInFlight, definitions) // definition0, definition1, definition2, definition3
+  val definitions      = (0 to 4).map(i => new DefinitionTable("definitions." + i) {})
+  val tables           = definitions :+ pendingRequests
   val ddl: profile.DDL = tables.map(_.schema).reduce(_ ++ _)
 
   /*val psgDatabaseConfig = new DatabaseConfig[PostgresProfile] {
@@ -386,6 +387,9 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
     }
     local
   }
+
+  def definitionTableByOwner(ownerId: String): DefinitionTable =
+    definitions(math.abs(ownerId.hashCode() % Tables.definitions.size))
 
   def createTables()(implicit sys: ActorSystem[_]): Future[Done] =
     db.run(ddl.createIfNotExists)
