@@ -76,11 +76,11 @@ object Guardian {
                   .shardingStateChanges(ddataShardReplicator, cluster.selfMember.address.host.getOrElse("local"))
               }(system.executionContext)
 
-            // Tables.createTables()
-            val definitionTables: Vector[String] = (0 until 4).map(i => "definitions" + i).toVector
+            // ProjectionManagement(system).getOffset()
 
-            DefinitionProjection.run(takenDefinition, numberOfTags, definitionTables)
-            Bootstrap(takenDefinition, definitionTables, selfAddress.host.get, grpcPort)(system, timeout)
+            Tables.createTables()
+            DefinitionProjection.run(takenDefinition, numberOfTags)
+            Bootstrap(takenDefinition, selfAddress.host.get, grpcPort)(system, timeout)
             Behaviors.same
           }
       }

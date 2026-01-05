@@ -86,13 +86,11 @@ libraryDependencies ++= Seq(
   //"org.wvlet.airframe" %% "airframe-ulid" % "2025.1.14",
 
   //"mysql" % "mysql-connector-java" % "8.0.33",
-  //"org.postgresql" % "postgresql" % "42.7.8",
-  //"com.lightbend.akka" %% "akka-persistence-jdbc" % AkkaPersistenceJdbcV,
-
-  "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
-  "com.lightbend.akka" %% "akka-projection-r2dbc" %  AkkaPersistenceR2dbcVersion,
+  "org.postgresql" % "postgresql" % "42.7.8",
+  "com.lightbend.akka" %% "akka-persistence-jdbc" % AkkaPersistenceJdbcV,
 
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
+  "com.lightbend.akka" %% "akka-projection-slick" % AkkaProjectionVersion,
 
   //"com.github.jaceksokol" %% "akka-stream-map-async-partition" % "1.0.3",
   "com.lihaoyi" % "ammonite" % AmmoniteVersion % "test" cross CrossVersion.full
