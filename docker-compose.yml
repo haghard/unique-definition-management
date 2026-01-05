@@ -1,4 +1,4 @@
-version: "3.7"
+version: "3.8"
 
 volumes:
   data-mysql:
@@ -10,9 +10,7 @@ services:
       - data-mysql:/var/lib/mysql
     environment:
       - MYSQL_ROOT_PASSWORD=root
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=udefinitions
     ports:
       - "3306:3306"
     healthcheck:
