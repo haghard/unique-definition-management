@@ -15,41 +15,19 @@ You usually can't have both low latency and ordering in Distributed Systems.
 
 Each unique definition belongs to exactly one `owner_id` at any point in time - this is what we want to achieve.
 
-It is a relative order invariant. Acquiring a new definition requires condition check, and then releasing its current definition which doesn't require any checks and cannot fail. 
-Causal ordering if enough to guarantee that we never violate it.
+It is a relative order invariant. Acquiring a new definition requires `precondition check`, and then releasing its current definition which doesn't require any checks and cannot fail. 
+Causal ordering if enough to guarantee that we never violate.
 
 
 ### Write path (Update)
- 1) One database RTT (read-modify-write) to read existing data by `owner_id` from `definition_index_view` and update  it (set is_locker=true)
+ 1) One database RTT (read-and-write) to read existing data by `owner_id` from `definitionN` and place the current request.
  2) One clustered RTT to perform `ConditionalPut` 
 
 
 ### I-offender 
 Operations that may break app level invariants when executed concurrently.
 
-### Create
-
-1) `OwnerId(1)` attempt to obtain definition=`a` and definition=`b` at the same time  
-   Create(ownerId(1), definition=a) <> Create(ownerId(1), definition=b)
-
-2) `OwnerId(1)` and `OwnerId(2)` attempt to obtain definition=`a` at the same time
-   Create(ownerId(1), definition=a) <> Create(ownerId(2), definition=a)
-
-### Update
-    
-1) `OwnerId(1)` attempts to update definition=`a` to definition=`b` from different clients at the same time
-2) `OwnerId(1)` attempts to update definition=`a` to definition=`b` and definition=`a` to definition=`c` from different clients at the same time
-
-```
-create DATABASE udefinitions
-
-```
-
-
 # How to run 
-
-1) create DATABASE udefinitions
-2) Execute all statements from `create_tables.sql`
 
 ```
 sbt a
@@ -58,7 +36,6 @@ sbt a
 ```
 sbt b
 ```
-
 
 
 ### Example method calls
@@ -71,29 +48,12 @@ http GET 127.0.0.1:8079/definitions/cluster/members
 http GET 127.0.0.2:8079/definitions/cluster/shards
 http GET 127.0.0.2:8079/definitions/cluster/shards/tkn-dfn
 
-
-
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-
-
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"3341739074684379528","seqNum":"1"},"ownerId":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"aas13334","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"location":{"bucketId":"6898668511187520942","seqNum":"1"},"ownerId":"111367c3-9ad3-47ef-a6b0-784d52c96489" }' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-grpcurl -d '{"definition":{"name":"ff6451324","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"definitionLocation":{"bucketId":"3341739074684379528","seqNum":"3"}, "owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-
-
-grpcurl -d '{"definition":{"name":"ff645","address":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"owner_id":"322367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/ConditionalPut
-
-grpcurl -d '{"owner_id":"222367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.definition.api.DefinitionService/getDefinitionLocation
-
 ```
 
 ```
    lock(OwnerId) {
       lock(Old_Definition) {
-         create_if_not_exist (New_Definition)
+         acquired_if_available(New_Definition)
          release(Old_Definition)
       }
    }
@@ -217,12 +177,3 @@ TRUNCATE TABLE definitions3;
 TRUNCATE TABLE pending_requests;
 ```
 
-docker-compose -f docker-compose-psg.yml up
-
-
-### Links
-
-https://pekko.apache.org/docs/pekko-persistence-r2dbc/current/query.html#eventsbyslices
-https://vladmihalcea.com/database-job-queue-skip-locked/
-https://habr.com/ru/articles/940066/
-https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html

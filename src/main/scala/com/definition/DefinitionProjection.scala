@@ -104,7 +104,7 @@ object DefinitionProjection {
                           .bind(0, acquired.ownerId)
                       )
                     )
-                    .map { rs => println(rs.mkString(",")); Done }
+                    .map { rs => println("Acquired new:" + rs.mkString(",")); Done }
               }
 
             case conflict: ConflictDetected =>
@@ -137,7 +137,7 @@ object DefinitionProjection {
                       .bind(0, released.ownerId)
                   )
                 )
-                .map { rs => println("Released:" + rs.mkString(",")); Done }
+                .map { rs => println(s"Released:${rs.mkString(",")}"); Done }
           }
     )(system)
   }

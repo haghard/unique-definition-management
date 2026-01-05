@@ -9,7 +9,6 @@ import akka.cluster.sharding.typed.ClusterShardingSettings
 import akka.cluster.sharding.typed.scaladsl.*
 import akka.cluster.typed.SelfUp
 import akka.cluster.*
-import akka.persistence.Persistence
 
 import scala.collection.immutable
 import scala.concurrent.duration.DurationInt
