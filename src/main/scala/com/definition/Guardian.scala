@@ -9,6 +9,7 @@ import akka.cluster.sharding.typed.ClusterShardingSettings
 import akka.cluster.sharding.typed.scaladsl.*
 import akka.cluster.typed.SelfUp
 import akka.cluster.*
+import akka.persistence.Persistence
 
 import scala.collection.immutable
 import scala.concurrent.duration.DurationInt
@@ -76,10 +77,11 @@ object Guardian {
                   .shardingStateChanges(ddataShardReplicator, cluster.selfMember.address.host.getOrElse("local"))
               }(system.executionContext)
 
-            Tables.createTables()
+            // Tables.createTables()
+            val definitionTables: Vector[String] = (0 until 4).map(i => "definitions" + i).toVector
 
-            DefinitionProjection.run(takenDefinition, numberOfTags)
-            Bootstrap(takenDefinition, selfAddress.host.get, grpcPort)(system, timeout)
+            DefinitionProjection.run(takenDefinition, numberOfTags, definitionTables)
+            Bootstrap(takenDefinition, definitionTables, selfAddress.host.get, grpcPort)(system, timeout)
             Behaviors.same
           }
       }

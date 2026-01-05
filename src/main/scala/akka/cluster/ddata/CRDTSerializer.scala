@@ -23,15 +23,21 @@ final class CRDTSerializer(system: ExtendedActorSystem)
         super.toBinary(obj)
 
       case orSet: ORSet[_] @unchecked =>
-        system.log.warning("ORSet({})", orSet.elements.mkString(","))
+        // system.log.warning("ORSet({})", orSet.elements.mkString(","))
         super.toBinary(orSet)
 
       case oRMultiMap: ORMultiMap[_, _] =>
-        system.log.warning("ORMultiMap({})", oRMultiMap.underlying.keys.elements.mkString(","))
+        // ORMultiMap(204)[ServiceKey[akka.actor.typed.internal.pubsub.TopicImpl$Command](r2dbc-taken-dfn-688),ServiceKey[akka.actor.typed.internal.pubsub.TopicImpl$Command](r2dbc-taken-dfn-953)...]
+
+        system.log.warning(
+          "ORMultiMap({}) [{}...]",
+          oRMultiMap.underlying.keys.elements.size,
+          oRMultiMap.underlying.keys.elements.take(2).mkString(",")
+        )
         super.toBinary(oRMultiMap)
 
       case crdt =>
-        system.log.warning("Other CRDT {}", crdt)
+        system.log.warning("Other CRDT {}", crdt.getClass.getName)
         super.toBinary(obj)
     }
 

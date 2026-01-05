@@ -56,6 +56,8 @@ trait ProtocDDataSupport extends SerializationSupport {
           .newBuilder()
           .setKey(key)
           .setDigest(ByteStringUtils.toProtoByteStringUnsafe(digest.toArrayUnsafe()))
+          /*.setDigest(ByteStringUtils.toProtoByteStringUnsafe(digest._1.toArrayUnsafe()))
+          .setUsedTimestamp(digest._2)*/
       )
     }
     status.toSystemUid.foreach(b.setToSystemUid) // can be None when sending back to a node of version 2.5.21
@@ -83,7 +85,11 @@ trait ProtocDDataSupport extends SerializationSupport {
     val status        = dm.Status.parseFrom(heapByteBuffer)
     val toSystemUid   = if (status.hasToSystemUid) Some(status.getToSystemUid) else None
     val fromSystemUid = if (status.hasFromSystemUid) Some(status.getFromSystemUid) else None
+
     Status(
+      /*status.getEntriesList.asScala.iterator.map { e =>
+        e.getKey -> (AkkaByteString.fromArrayUnsafe(e.getDigest.toByteArray()) -> e.getUsedTimestamp)
+      }.toMap,*/
       status.getEntriesList.asScala.iterator
         .map(e => e.getKey -> AkkaByteString.fromArrayUnsafe(e.getDigest.toByteArray()))
         .toMap,
@@ -129,7 +135,10 @@ trait ProtocDDataSupport extends SerializationSupport {
     val toSystemUid   = if (gossip.hasToSystemUid) Some(gossip.getToSystemUid) else None
     val fromSystemUid = if (gossip.hasFromSystemUid) Some(gossip.getFromSystemUid) else None
     Gossip(
-      gossip.getEntriesList.asScala.iterator.map(e => e.getKey -> dataEnvelopeFromProto(e.getEnvelope)).toMap,
+      gossip.getEntriesList.asScala.iterator
+        .map(e => e.getKey -> dataEnvelopeFromProto(e.getEnvelope))
+        // .map(e => e.getKey -> (dataEnvelopeFromProto(e.getEnvelope) -> e.getUsedTimestamp))
+        .toMap,
       sendBack = gossip.getSendBack,
       toSystemUid,
       fromSystemUid
@@ -139,7 +148,14 @@ trait ProtocDDataSupport extends SerializationSupport {
   def gossipToProto(gossip: Gossip): dm.Gossip = {
     val b = dm.Gossip.newBuilder().setSendBack(gossip.sendBack)
     gossip.updatedData.foreach { case (key, data) =>
-      b.addEntries(dm.Gossip.Entry.newBuilder().setKey(key).setEnvelope(dataEnvelopeToProto(data)))
+      b.addEntries(
+        dm.Gossip.Entry
+          .newBuilder()
+          .setKey(key)
+          .setEnvelope(dataEnvelopeToProto(data))
+          // .setEnvelope(dataEnvelopeToProto(data._1))
+          // .setUsedTimestamp(data._2)
+      )
     }
     gossip.toSystemUid.foreach(b.setToSystemUid)
     b.setFromSystemUid(gossip.fromSystemUid.get)

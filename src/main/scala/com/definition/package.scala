@@ -1,5 +1,11 @@
 package com.definition
 
+object tables {
+
+  def definitionTableByOwner(tables: Vector[String], ownerId: String) =
+    tables(math.abs(ownerId.hashCode() % tables.size))
+}
+
 object Implicits {
 
   implicit class Ops(val self: com.definition.domain.Definition) extends AnyVal {

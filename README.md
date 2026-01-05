@@ -205,6 +205,20 @@ DELETE FROM event_journal;
 DROP TABLE definition_index_view;
 ```
 
+```
+TRUNCATE TABLE akka_projection_management;
+TRUNCATE TABLE akka_projection_offset_store;
+TRUNCATE TABLE akka_projection_timestamp_offset_store;
+TRUNCATE TABLE event_journal;
+TRUNCATE TABLE definitions0;
+TRUNCATE TABLE definitions1;
+TRUNCATE TABLE definitions2;
+TRUNCATE TABLE definitions3;
+TRUNCATE TABLE pending_requests;
+```
+
+docker-compose -f docker-compose-psg.yml up
+
 
 ### Links
 

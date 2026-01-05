@@ -11,8 +11,36 @@ val AkkaVersion = "2.7.0"
 val AkkaHttpVersion = "10.4.0"
 val AkkaManagementVersion = "1.2.0"
 val AkkaPersistenceJdbcV = "5.2.0"
-val AkkaPersistenceR2dbcVersion = "1.0.0"
-val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0")
+val AkkaPersistenceR2dbcVersion = "1.0.1"
+val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0") // 1.4.2
+
+
+/*
+Akka (core) 2.8.2
+Akka HTTP 10.5.2
+Akka gRPC 2.3.2
+Akka Management 1.4.0
+Alpakka Kafka 4.0.2
+Alpakka 6.0.1
+Akka Persistence R2DBC 1.1.0 (+)
+Akka Persistence JDBC 5.2.1
+Akka Persistence Cassandra 1.1.1
+Akka Projections 1.4.0
+Akka Diagnostics 2.0.0
+*/
+
+
+/*
+val AkkaVersion = "2.8.2"
+val AkkaHttpVersion = "10.5.2"
+val AkkaManagementVersion = "1.4.0"
+val AkkaPersistenceJdbcV = "5.2.1"
+val AkkaPersistenceR2dbcVersion = "1.1.0" //(+)
+//val AkkaPersistenceR2dbcVersion = "1.4.0"
+val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.4.0")
+*/
+
+
 
 lazy val java17Settings = Seq(
   "--add-opens",
@@ -58,11 +86,14 @@ libraryDependencies ++= Seq(
 
   //"org.wvlet.airframe" %% "airframe-ulid" % "2025.1.14",
 
-  "mysql" % "mysql-connector-java" % "8.0.33",
-  "com.lightbend.akka" %% "akka-persistence-jdbc" % AkkaPersistenceJdbcV,
+  //"mysql" % "mysql-connector-java" % "8.0.33",
+  //"org.postgresql" % "postgresql" % "42.7.8",
+  //"com.lightbend.akka" %% "akka-persistence-jdbc" % AkkaPersistenceJdbcV,
+
+  "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
+  "com.lightbend.akka" %% "akka-projection-r2dbc" %  AkkaPersistenceR2dbcVersion,
 
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
-  "com.lightbend.akka" %% "akka-projection-slick" % AkkaProjectionVersion,
 
   //"com.github.jaceksokol" %% "akka-stream-map-async-partition" % "1.0.3",
   "com.lihaoyi" % "ammonite" % AmmoniteVersion % "test" cross CrossVersion.full

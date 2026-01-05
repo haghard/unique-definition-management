@@ -20,6 +20,7 @@ object Bootstrap {
 
 final case class Bootstrap(
   shardRegion: ActorRef[Cmd],
+  definitionTables: Vector[String],
   bindHost: String,
   port: Int
 )(implicit system: ActorSystem[_], timeout: akka.util.Timeout) {
@@ -31,7 +32,7 @@ final case class Bootstrap(
 
   val shutdown                                         = CoordinatedShutdown(system)
   val grpcService: HttpRequest => Future[HttpResponse] =
-    DefinitionServiceHandler.withServerReflection(new DefinitionServiceImpl(shardRegion))
+    DefinitionServiceHandler.withServerReflection(new DefinitionServiceImpl(shardRegion, definitionTables))
 
   Http(system)
     .newServerAt(bindHost, port)

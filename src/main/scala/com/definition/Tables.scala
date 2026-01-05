@@ -2,13 +2,13 @@ package com.definition
 
 import akka.Done
 import akka.actor.typed.ActorSystem
-import akka.projection.slick.SlickProjection
+//import akka.projection.slick.SlickProjection
 import com.definition.api.{PutReply, PutRequest}
 import com.definition.domain.event.ConflictTag
 import com.definition.domain.*
 import scalapb.*
-import slick.basic.DatabaseConfig
-import slick.jdbc.{GetResult, MySQLProfile, PostgresProfile}
+//import slick.basic.DatabaseConfig
+//import slick.jdbc.{GetResult, MySQLProfile, PostgresProfile}
 
 import java.util.UUID
 import scala.concurrent.*
@@ -19,6 +19,8 @@ sealed trait RequestResult
 
 object RequestResult {
   final case class Ok(definitionLocation: DefinitionLocation) extends RequestResult
+
+  final case object Update extends RequestResult
 
   final case object Placed extends RequestResult
 
@@ -35,6 +37,7 @@ object RequestResult {
   final case object NotFound extends RequestResult
 }
 
+/*
 final case class DefinitionRow(
   name: String,
   definition: Definition,
@@ -43,6 +46,7 @@ final case class DefinitionRow(
   sequenceNr: Long,
   ts: Long
 )
+
 
 sealed abstract case class RequestTag(val id: Int)
 
@@ -53,8 +57,12 @@ object RequestTag {
 }
 
 final case class PendingRequestRow(ownerId: UUID, request: PutRequest, tag: Int, when: Long)
+ */
 
-class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: ExecutionContext) {
+/*
+class SlickTablesGeneric(val profile: slick.jdbc.PostgresProfile /*slick.jdbc.MySQLProfile*/ )(implicit
+  ec: ExecutionContext
+) {
 
   import profile.api._
 
@@ -75,17 +83,17 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
   class Definitions(tag: Tag, tableName: String) extends Table[DefinitionRow](tag, tableName) {
 
     // for debug only
-    def name: Rep[String] = column[String]("NAME", O.Length(400))
+    def name: Rep[String] = column[String]("name", O.Length(400))
 
-    def definition: Rep[Definition] = column[Definition]("DEFINITION")
+    def definition: Rep[Definition] = column[Definition]("definition")
 
-    def ownerId: Rep[UUID] = column[UUID]("OWNER_ID")
+    def ownerId: Rep[UUID] = column[UUID]("owner_id")
 
-    def bucketId: Rep[Long] = column[Long]("HASH_BUCKET_ID")
+    def bucketId: Rep[Long] = column[Long]("hash_bucket_id")
 
-    def sequenceNr: Rep[Long] = column[Long]("SEQ_NUM")
+    def sequenceNr: Rep[Long] = column[Long]("seq_num")
 
-    def time: Rep[Long] = column[Long]("TIME")
+    def time: Rep[Long] = column[Long]("time")
 
     def pk: slick.lifted.PrimaryKey = primaryKey(tableName + "__pk", (bucketId, sequenceNr))
 
@@ -104,6 +112,8 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
         .filter(_.ownerId === ownerId)
         .map(rep => (rep.bucketId, rep.sequenceNr, rep.definition))
     }
+
+
 
     def getLocationDefinition(ownerId: UUID): Future[Option[(Long, Long, Definition)]] =
       db.run(locationDefinition(ownerId).result.headOption)
@@ -142,13 +152,13 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
 
   class PendingRequest(tag: Tag) extends Table[PendingRequestRow](tag, "pending_requests") {
 
-    def ownerId: Rep[UUID] = column[UUID]("OWNER_ID")
+    def ownerId: Rep[UUID] = column[UUID]("owner_id")
 
-    def request: Rep[PutRequest] = column[PutRequest]("REQUEST")
+    def request: Rep[PutRequest] = column[PutRequest]("request")
 
-    def requestTag: Rep[Int] = column[Int]("TAG")
+    def requestTag: Rep[Int] = column[Int]("tag")
 
-    def when: Rep[Long] = column[Long]("WHEN")
+    def when: Rep[Long] = column[Long]("ts")
 
     def pk: slick.lifted.PrimaryKey = primaryKey("pending_request__pk_owner_id", ownerId)
 
@@ -193,12 +203,16 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
     in: PutRequest
   )(ask: PutRequest => Future[PutReply]): Future[PutReply] = {
     val ownerId = UUID.fromString(in.ownerId)
-    val dbio    =
+
+    val q =
       definitionTableByOwner(in.ownerId)
         .locationDefinition(ownerId)
         .result
-        .headOption
-        .flatMap {
+
+    val dbio =
+      q.headOption.flatMap { r =>
+        println(" ----- " + r)
+        r match {
           case None =>
             pendingRequests.initiate[RequestTag.Create.type](ownerId, in)
 
@@ -210,7 +224,7 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
               DBIO.successful(RequestResult.OwnerReserved(entityId, seqNum))
             }
         }
-        .transactionally
+      }.transactionally
 
     db.run(dbio)
       .flatMap {
@@ -364,19 +378,19 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
       }
   }
 
-  val definitions      = (0 to 4).map(i => new DefinitionTable("definitions." + i) {})
+  val definitions      = (0 to 4).map(i => new DefinitionTable("definitions" + i) {})
   val tables           = definitions :+ pendingRequests
   val ddl: profile.DDL = tables.map(_.schema).reduce(_ ++ _)
 
   /*val psgDatabaseConfig = new DatabaseConfig[PostgresProfile] {
-    val profile = PostgresProfile
-    def db = database.asInstanceOf[profile.backend.Database]
-    def config = ConfigFactory.empty
-    def profileName = "slick.jdbc.PostgresProfile"
+    val profile         = PostgresProfile
+    def db              = database.asInstanceOf[profile.backend.Database]
+    def config          = ConfigFactory.empty
+    def profileName     = "slick.jdbc.PostgresProfile"
     def profileIsObject = false
   }*/
 
-  private val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
+  private val dbConfig = DatabaseConfig.forConfig[slick.jdbc.PostgresProfile]("akka.projection.slick")
   val db               = {
     val local = dbConfig.db
     val md    = local.source.createConnection().getMetaData()
@@ -388,12 +402,34 @@ class SlickTablesGeneric(val profile: slick.jdbc.MySQLProfile)(implicit ec: Exec
     local
   }
 
+  /*private val dbConfig = DatabaseConfig.forConfig[MySQLProfile]("akka.projection.slick")
+  val db               = {
+    val local = dbConfig.db
+    val md    = local.source.createConnection().getMetaData()
+    (1 to 8).foreach(i => println(s"Supports $i = " + md.supportsTransactionIsolationLevel(i)))
+    Using.resource(local.source.createConnection()) { con =>
+      println("Active TransactionIsolation:" + con.getTransactionIsolation()) // 4 - TRANSACTION_REPEATABLE_READ
+      con.close()
+    }
+    local
+  }*/
+
   def definitionTableByOwner(ownerId: String): DefinitionTable =
     definitions(math.abs(ownerId.hashCode() % Tables.definitions.size))
 
-  def createTables()(implicit sys: ActorSystem[_]): Future[Done] =
+  def createTables()(implicit sys: ActorSystem[_]): Future[Done] = {
+    ddl.createStatements.foreach { s =>
+      println(s)
+    }
+
     db.run(ddl.createIfNotExists)
       .flatMap(_ => SlickProjection.createTablesIfNotExists(dbConfig))
+  }
 }
 
-object Tables extends SlickTablesGeneric(slick.jdbc.MySQLProfile)(ExecutionContext.parasitic)
+object Tables
+    extends SlickTablesGeneric(
+      // slick.jdbc.MySQLProfile
+      slick.jdbc.PostgresProfile
+    )(ExecutionContext.parasitic)
+ */
